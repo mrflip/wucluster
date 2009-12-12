@@ -10,4 +10,9 @@ HADOOP_EC2_DIR = File.expand_path(File.dirname(__FILE__))
 # # Ec2Snapshot.list_all
 # Ec2Volumes.list_all
 
-p Wucluster::Ec2Volume.find 'vol-d5d826bc'
+# vol = Wucluster::Ec2Volume.find 'vol-1cfa0475'
+# p vol.snapshots
+
+#p Wucluster::Ec2Snapshot.find 'snap-aabe02c3'
+#p Wucluster::Ec2Snapshot.all
+

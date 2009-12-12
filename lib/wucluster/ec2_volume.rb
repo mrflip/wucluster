@@ -30,6 +30,13 @@ module Wucluster
     # def delete(options={}) end
 
     #
+    # Associated Snapshots
+    #
+    def snapshots
+      Wucluster::Ec2Snapshot.for_volume id
+    end
+
+    #
     # Attachment info
     #
 
@@ -48,47 +55,46 @@ module Wucluster
     # Facade for EC2 API
     #
 
-    # Hash of all ec2_volumes
+    # Hash of all ec2_volumes, :volume_id => Ec2Volume instance
     def self.all
       @all ||= self.load_volumes_list!
     end
-
+    # list of all volumes
     def self.volumes
       all.values
     end
 
     # Retrieve volume from list of all volumes, or by querying AWS directly
     def self.find volume_id
-      all[volume_id.to_s] || self.from_id(volume_id)
+      all[volume_id.to_s] || self.from_ec2(volume_id)
     end
 
     # refreshes info from AWS, flushing any current state
     def refresh!
-      merge! self.class.from_id(self.id)
+      merge! self.class.from_ec2(self.id)
     end
 
   protected
 
-    #
-    # Load all volumes from AWS
+    # retrieve info for all volumes from AWS
     def self.load_volumes_list!
       @all = {}
-      Wucluster.ec2.describe_volumes.volumeSet.item.each do |volume_hsh|
+      Wucluster.ec2.describe_volumes(:owner_id => Wucluster.aws_account_id).volumeSet.item.each do |volume_hsh|
         @all[volume_hsh['volumeId']] = self.from_ec2(volume_hsh)
       end
       Log.info "Loaded list of #{@all.length} volumes"
       @all
     end
 
-    # Create volume using info retrieved from AWS directly
+    # retrieve volume info from AWS directly
     #      {"attachmentSet"=>nil, "createTime"=>"2009-11-02T14:31:53.000Z", "size"=>"100",
     #       "volumeId"=>"vol-bfd826d6", "snapshotId"=>"snap-0429a56d", "status"=>"available", "availabilityZone"=>"us-east-1d"},
     def self.from_ec2 volume_id
-      volume_hsh = Wucluster.ec2.describe_volumes(:volume_id => volume_id).volumeSet.item.first rescue nil
+      volume_hsh = Wucluster.ec2.describe_volumes(:volume_id => volume_id, :owner_id => Wucluster.aws_account_id).volumeSet.item.first rescue nil
       self.from_ec2_hsh volume_hsh
     end
 
-    # Use the hash sent back from AWS to construct an Ec2Volume instance
+    # construct instance using hash as sent back from AWS
     def self.from_ec2_hsh(volume_hsh)
       return nil if volume_hsh.blank?
       self.new(* volume_hsh.values_of('volumeId', 'size', 'snapshotId', 'availabilityZone', 'status', 'createTime', 'attachmentSet'))
