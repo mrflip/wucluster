@@ -16,8 +16,7 @@ module Wucluster
 
     def create_snapshot options={}
       Wucluster.ec2.create_snapshot options.merge(:volume_id => self.id,
-        :description => handle
-        )
+        :description => handle   )
     end
 
     # removes volume from its instance

@@ -16,6 +16,18 @@ module Wucluster
       self.coerce_to_int!(:node_vol_idx, true)
     end
 
+    def delete_old_snapshots
+      Log.info "Deleting snapshots from mount point #{description}"
+      # order by date
+      old_snapshots = snapshots.sort_by(&:created_at)
+      old_snapshots.detect!{|snapshot| snapshot.status == "completed"}
+      # remove the last
+      old_snapshots.pop
+      old_snapshots do |snapshot|
+        snapshot.delete!
+      end
+    end
+
     # Summary name for this volume
     # Ex:  gibbon+master+01+00+/dev/sdh+/mnt/home+vol-1cfa0475
     def handle

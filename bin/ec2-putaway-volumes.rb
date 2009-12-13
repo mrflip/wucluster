@@ -4,7 +4,7 @@ $: << WUCLUSTER_DIR+'/../lib'
 require 'rubygems'
 require 'wucluster'
 
-HADOOP_EC2_DIR = File.expand_path(File.dirname(__FILE__))
+HADOOP_EC2_DIR = File.expand_path(ENV['HOME']+'/.hadoop-ec2')
 
 # # Cluster.new(:gibbon).put_away_volumes
 # # Ec2Snapshot.list_all
@@ -16,3 +16,4 @@ HADOOP_EC2_DIR = File.expand_path(File.dirname(__FILE__))
 #p Wucluster::Ec2Snapshot.find 'snap-aabe02c3'
 #p Wucluster::Ec2Snapshot.all
 
+Wucluster::Cluster.new(:gibbon).delete_old_snapshots

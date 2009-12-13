@@ -18,6 +18,19 @@ module Wucluster
     cattr_accessor :list
     attr_accessor :volume, :mount_point
 
+    def description
+      [id, volume_id].join("\t")
+    end
+
+    #
+    # Volume operations
+    #
+
+    def delete!
+      Log.info "Deleting snapshot #{description}: Lo, I die"
+      # delete_snapshot(:snapshot_id => id)
+    end
+
     #
     # Associations
     #

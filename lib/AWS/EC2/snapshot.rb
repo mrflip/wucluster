@@ -1,6 +1,5 @@
 module AWS
   module EC2
-
     class Base < AWS::Base
 
       # The CreateSnapshot operation creates a snapshot of an Amazon EBS volume and stores it in Amazon S3. You can use snapshots for backups, to launch instances from identical snapshots, and to save data before shutting down an instance.
