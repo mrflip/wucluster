@@ -27,7 +27,7 @@ module Wucluster
     #
 
     def delete!
-      Log.info "Deleting snapshot #{description}: Lo, I die"
+      Log.info "Deleting snapshot #{description}. O, I die, Horatio."
       # delete_snapshot(:snapshot_id => id)
     end
 
@@ -72,10 +72,15 @@ module Wucluster
       merge! self.class.from_ec2(self.id)
     end
 
+    def valid_for_?
+      ClusterMount.from_handle volume_handle
+    end
+
   protected
 
     # retrieve all snapshots from AWS
     def self.load_snapshots_list!
+      Log.info "Loading snapshots list"
       @all = {}
       Wucluster.ec2.describe_snapshots(:owner_id => Wucluster.aws_account_id).snapshotSet.item.each do |snapshot_hsh|
         @all[snapshot_hsh['snapshotId']] = self.from_ec2_hsh(snapshot_hsh)

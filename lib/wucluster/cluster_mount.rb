@@ -10,10 +10,13 @@ module Wucluster
     :volume_id
     )
   ClusterMount.class_eval do
+    cattr_accessor :all
+    self.all = {}
     def initialize *args
       super *args
       self.coerce_to_int!(:node_idx,   true)
       self.coerce_to_int!(:node_vol_idx, true)
+      self.class.all[volume_id] = self
     end
 
     def delete_old_snapshots
@@ -43,13 +46,38 @@ module Wucluster
       self.new *handle.split("+", self.keys.length)
     end
 
-    def size()          ec2_volume[:size] end
-    def from_snapshot() ec2_volume[:from_snapshot] end
-    def region()        ec2_volume[:region] end
-    def state()         ec2_volume[:state]  end
-    def created_at()    ec2_volume[:created_at]  end
-    def ec2_volume
-      Ec2Volumes.find(volume_id)
+    def self.find volume_id
+      all[volume_id]
+    end
+
+    #
+    # Delegate stuff to the contained volume
+    #
+
+    def volume
+      Ec2Volume.find(volume_id)
+    end
+
+    def size()          volume.size          end
+    def from_snapshot() volume.from_snapshot end
+    def region()        volume.region        end
+    def state()         volume.state         end
+    def created_at()    volume.created_at    end
+
+    def detach!()
+      volume.detach!
+    end
+    def delete_volume!()
+      volume.delete!
+    end
+    def attached?()
+      volume.attached?
+    end
+    def snapshots()
+      volume.snapshots
+    end
+    def create_snapshot
+      volume.create_snapshot
     end
   end
 end

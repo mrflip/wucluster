@@ -14,19 +14,34 @@ module Wucluster
     # Volume operations
     #
 
+    # def self.create_volume(options={}) end
+
+    # def attach_volume(options={}) end
+
+    # Create a snapshot of the volume, including metadata in
+    # the description to make it recoverable
     def create_snapshot options={}
-      Wucluster.ec2.create_snapshot options.merge(:volume_id => self.id,
-        :description => handle   )
+      Log.info "Creating snapshot for #{id} as #{mount_handle}"
+      Wucluster.ec2.create_snapshot options.merge(:volume_id => self.id, :description => mount_handle   )
     end
 
     # removes volume from its instance
-    def detach options={}
+    def detach! options={}
+      return if detached?
+      Log.info "Detaching #{id}: #{[attached_instance, status].inspect}"
       Wucluster.ec2.detach_volume options.merge(:volume_id => self.id)
     end
 
-    # def attach_volume(options={}) end
-    # def self.create_volume(options={}) end
-    # def delete(options={}) end
+    def detached?()
+      attached_instance.nil? && (status == "available")
+    end
+    def attached?() not detached? end
+
+    def delete!()
+      Log.info "Deleting #{id}"
+      # Wucluster.ec2.detach_volume options.merge(:volume_id => self.id)
+      raise "not yet"
+    end
 
     #
     # Associated Snapshots
@@ -54,6 +69,10 @@ module Wucluster
     # Facade for EC2 API
     #
 
+    def mount_handle
+      ClusterMount.find(id).handle
+    end
+
     # Hash of all ec2_volumes, :volume_id => Ec2Volume instance
     def self.all
       @all ||= self.load_volumes_list!
@@ -71,12 +90,14 @@ module Wucluster
     # refreshes info from AWS, flushing any current state
     def refresh!
       merge! self.class.from_ec2(self.id)
+
     end
 
   protected
 
     # retrieve info for all volumes from AWS
     def self.load_volumes_list!
+      Log.info "Loading volume list"
       @all = {}
       Wucluster.ec2.describe_volumes(:owner_id => Wucluster.aws_account_id).volumeSet.item.each do |volume_hsh|
         @all[volume_hsh['volumeId']] = self.from_ec2(volume_hsh)

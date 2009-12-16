@@ -16,4 +16,9 @@ HADOOP_EC2_DIR = File.expand_path(ENV['HOME']+'/.hadoop-ec2')
 #p Wucluster::Ec2Snapshot.find 'snap-aabe02c3'
 #p Wucluster::Ec2Snapshot.all
 
-Wucluster::Cluster.new(:gibbon).delete_old_snapshots
+gibbon = Wucluster::Cluster.new(:gibbon)
+# gibbon.detach_volumes
+# gibbon.ensure_volumes_are_detached
+# gibbon.snapshot_volumes
+
+puts gibbon.snapshots.map(&:inspect)
