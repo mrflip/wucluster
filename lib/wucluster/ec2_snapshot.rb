@@ -19,7 +19,22 @@ module Wucluster
     attr_accessor :volume, :mount_point
 
     def description
-      [id, volume_id].join("\t")
+      [id, volume_id, progress, "%9s"%status, created_at].join("\t")
+    end
+
+    def age
+      created_at_time = Time.parse(self.created_at)
+      return Time.now.utc - created_at_time
+    end
+
+    LONG_TIME_AGO       = 10*365*24*60*60
+    RECENT_SNAPSHOT_AGE = 2*60*60
+    def recent?
+      age < RECENT_SNAPSHOT_AGE
+    end
+
+    def completed?
+      (status == "completed") && (progress == "100%")
     end
 
     #
@@ -27,8 +42,8 @@ module Wucluster
     #
 
     def delete!
-      Log.info "Deleting snapshot #{description}. O, I die, Horatio."
-      # delete_snapshot(:snapshot_id => id)
+      Log.info "Deleting #{description}. O, I die, Horatio."
+      Wucluster.ec2.delete_snapshot(:snapshot_id => id)
     end
 
     #

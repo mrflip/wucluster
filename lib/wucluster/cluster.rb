@@ -29,19 +29,18 @@ module Wucluster
     end
 
     def detach_volumes *args
-      mounts.each do |mount|
-        mount.detach!
-      end
+      mounts.each(&:detach!)
     end
 
     def ensure_volumes_are_detached
-      20.times do
+      10.times do
         still_attached = mounts.find_all{|mount| mount.attached?}
-        if still_attached.blank? then Log.info "All mounts for the #{name} cluster are detached"; break ; end
+        if still_attached.blank? then Log.info "All mounts for the #{name} cluster are detached"; return true ; end
         still_attached.each{|mount| mount.detach! }
         $stderr.puts "Wating on #{still_attached.length} nodes: #{still_attached.map(&:volume_id).inspect}"
         sleep 2
       end
+      return false
     end
 
     def snapshots
@@ -55,17 +54,20 @@ module Wucluster
     # Ask each mount to create a snapshot of its volume, including metadata in
     # the description to make it recoverable
     def snapshot_volumes
-      mounts[0..1].each do |mount|
+      mounts.each do |mount|
         mount.create_snapshot
       end
-    end
-
-    def delete_volumes_with_recent_snapshots
     end
 
     def delete_old_snapshots *args
       mounts.each do |mount|
         mount.delete_old_snapshots *args
+      end
+    end
+
+    def delete_volumes_with_recent_snapshots
+      mounts.each do |mount|
+        mount.delete_volume_if_has_recent_snapshot!
       end
     end
 

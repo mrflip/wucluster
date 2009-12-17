@@ -4,7 +4,14 @@ $: << WUCLUSTER_DIR+'/../lib'
 require 'rubygems'
 require 'wucluster'
 
+# module Wucluster
+#   def self.ec2
+#     @ec2 = AWS::EC2::Mock.new
+#   end
+# end
+
 HADOOP_EC2_DIR = File.expand_path(ENV['HOME']+'/.hadoop-ec2')
+
 
 # # Cluster.new(:gibbon).put_away_volumes
 # # Ec2Snapshot.list_all
@@ -17,8 +24,20 @@ HADOOP_EC2_DIR = File.expand_path(ENV['HOME']+'/.hadoop-ec2')
 #p Wucluster::Ec2Snapshot.all
 
 gibbon = Wucluster::Cluster.new(:gibbon)
-# gibbon.detach_volumes
-# gibbon.ensure_volumes_are_detached
-# gibbon.snapshot_volumes
+gibbon.detach_volumes
+gibbon.ensure_volumes_are_detached or raise "Couldn't detach all volumes"
+gibbon.snapshot_volumes
+gibbon.delete_old_snapshots
+gibbon.delete_volumes_with_recent_snapshots
+# puts gibbon.mounts.map(&:inspect)
+# puts gibbon.snapshots.map(&:inspect)
 
-puts gibbon.snapshots.map(&:inspect)
+
+# gibbon.mounts.each do |mount|
+#   puts  mount.inspect
+#
+#   # puts "\t" + mount.volume.inspect
+#   # mount.snapshots.each do |snapshot|
+#   #   puts "\t\t" + snapshot.inspect
+#   # end
+# end

@@ -4,6 +4,7 @@ require 'wukong/extensions'
 require 'wukong/extensions/hash_keys'
 require 'AWS'
 load File.dirname(__FILE__)+'/AWS/EC2/snapshot.rb'
+require 'AWS/EC2/mock'
 autoload :Log, 'wucluster/logger'
 
 module Wucluster
