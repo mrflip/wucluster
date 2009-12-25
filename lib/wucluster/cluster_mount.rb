@@ -1,5 +1,4 @@
 module Wucluster
-
   ClusterMount = Struct.new(
     :cluster,
     :role,
@@ -17,6 +16,47 @@ module Wucluster
       self.coerce_to_int!(:node_idx,   true)
       self.coerce_to_int!(:node_vol_idx, true)
       self.class.all[volume_id] = self
+    end
+
+    def ready?
+      (   volume_active?) && (   volume_attached?)
+    end
+    def separated?
+      (   volume_active?) && ( ! volume_attached?)
+    end
+    def available?
+      separated?
+    end
+    def away?
+      ( ! volume_active?) && (   snapshot_exists?)
+    end
+    def raw?
+      ( ! volume_active?) && ( ! snapshot_exists?)
+    end
+    #
+    # Imperatives
+    #
+    def make_ready
+      make_created
+      volume.attach!
+    end
+    def make_away
+      make_separated
+      make_recently_snapshotted
+      make_away
+    end
+
+    def delete_if_has_recent_snapshot!()
+      if    status != "available"
+        Log.info "Not removing #{id}: volume is #{status}"
+        return
+      elsif ! has_recent_snapshot?
+        Log.info "Not removing #{id}: #{newest_snapshot ? "{newest_snapshot.description} is too old" : "no snapshot exists"}"
+        return
+      else
+        Log.info "Deleting #{id}: have recent snapshot #{newest_snapshot.description}"
+        Wucluster.ec2.delete_volume :volume_id => self.id
+      end
     end
 
     def delete_old_snapshots
@@ -91,5 +131,29 @@ module Wucluster
       end
       volume.create_snapshot
     end
+
+    #
+    # Snapshot
+    #
+
+    # Create a snapshot of the volume, including metadata in
+    # the description to make it recoverable
+    def create_snapshot options={}
+      Log.info "Creating snapshot for #{id} as #{mount_handle}"
+      Wucluster.ec2.create_snapshot options.merge(:volume_id => self.id, :description => mount_handle   )
+    end
+
+    def newest_snapshot
+      snapshots.sort_by(&:created_at).find_all(&:completed?).last
+    end
+    def has_recent_snapshot?
+      newest_snapshot && newest_snapshot.recent?
+    end
+
+    # List Associated Snapshots
+    def snapshots
+      Wucluster::Ec2Snapshot.for_volume id
+    end
+
   end
 end

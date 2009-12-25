@@ -52,6 +52,42 @@ class NodeSm
   end
 end
 
+#
+# State machine for a cluster mount
+#
+# A mount can be
+# * ready:        volume active and is attached
+# * (attaching)
+# * (detaching)
+# * detached:     volume active and is detached but no recent snapshot exists
+# * (creating)
+# * (deleting)
+# * (snapshotting)
+# * deletable:    volume active, detatched and a recent snapshot exists
+# * away:         volume is away and a snapshot exists
+# * raw:          volume is away and no snapshot exists
+#
+class MountSm
+
+end
+
+    # attached_instance={"item"=>[{"device"=>"/dev/sdf",
+    # "volumeId"=>"vol-e59e638c", "deleteOnTermination"=>"false",
+    # "instanceId"=>"i-8f0354e6", "attachTime"=>"2009-10-03T20:48:49.000Z",
+    # "status"=>"attached"}]}
+
+    # def device()            end
+    # def instance()          end
+    # def instance_id()       end
+    # def attached_at()       end
+    # def attachment_status() end
+
+
+# ===========================================================================
+#
+# Mocks
+#
+
 module Mocker
   def successful prob=0.8
     rand < prob
@@ -71,65 +107,8 @@ class MockNode
   end
 end
 
-#
-# State machine for a cluster mount
-#
-# A mount can be
-# * ready:        volume active and is attached
-# * (attaching)
-# * (detaching)
-# * detached:     volume active and is detached but no recent snapshot exists
-# * (creating)
-# * (deleting)
-# * (snapshotting)
-# * deletable:    volume active, detatched and a recent snapshot exists
-# * away:         volume is away and a snapshot exists
-# * raw:          volume is away and no snapshot exists
-#
-class MountSm
-  def ready?
-    volume_active? && volume_attached?
-  end
-  def detached?
-    volume_active? && (! volume_attached?) && (! recent_snapshot_exists?)
-  end
-  def deletable?
-    volume_active? && (! volume_attached?) && recent_snapshot_exists?
-  end
-  def away?
-    (! volume_active?) && snapshot_exists?
-  end
-  def raw?
-    (! volume_active?) && (! snapshot_exists?)
-  end
-
-  #
-  # Imperatives
-  #
-
-  #
-  def make_attached!
-    return :wait if transitional?
-    case status
-    when :attached  then                             return true
-    when :detached  then volume.try_to_detach(node); return :wait
-    when :away      then try_to_create_volume;       return :wait
-    else raise "Undefined state #{status.inspect} for #{self.inspect}"
-    end
-  end
-
-  #
-  def make_detached!
-    return :wait if transitional?
-    case status
-    when :attached  then volume.try_to_attach(node); return :wait
-    when :detached  then                             return true
-    when :away      then try_to_create_volume;       return :wait
-    else raise "Undefined state #{status.inspect} for #{self.inspect}"
-    end
-  end
-
-
+class MockCluster
+  include Mocker
 end
 
 class MockMount < MountSm
@@ -139,11 +118,9 @@ class MockMount < MountSm
     self.node           = node
     self._volume_status = [:attached, :detached, :away].random
   end
-
   def transitional?
     [:attaching, :detaching, :creating, :deleting, :snapshotting].include?(status)
   end
-
   def try_to_activate
   end
   def try_to_deactivate
@@ -168,19 +145,22 @@ end
 
 class MockVolume
   include Mocker
+  #
+  def make_attached!
+    return :wait if transitional?
+    case status
+    when :attached  then                             return true
+    when :detached  then volume.try_to_detach(node); return :wait
+    when :away      then try_to_create_volume;       return :wait
+    else raise "Undefined state #{status.inspect} for #{self.inspect}"
+    end
+  end
 end
-
-
-class MockCluster
-  include Mocker
-end
-
 
 class Array
   def random
     self[Kernel.rand(size)]
   end
-
   def random_subset(len=2)
     rs = []
     len.times { rs << random }
