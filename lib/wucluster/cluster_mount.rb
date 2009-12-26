@@ -46,6 +46,16 @@ module Wucluster
       make_away
     end
 
+    def make_attached!
+      return :wait if transitional?
+      case status
+      when :attached  then                             return true
+      when :detached  then volume.try_to_detach(node); return :wait
+      when :away      then try_to_create_volume;       return :wait
+      else raise "Undefined state #{status.inspect} for #{self.inspect}"
+      end
+    end
+
     def delete_if_has_recent_snapshot!()
       if    status != "available"
         Log.info "Not removing #{id}: volume is #{status}"

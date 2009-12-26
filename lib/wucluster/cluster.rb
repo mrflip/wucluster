@@ -3,78 +3,121 @@ module Wucluster
   # Cluster holds our idea of a hadoop cluster,
   # as embodied in the hadoop-ec2 config files
   #
-  Cluster = Struct.new(:name)
+  Cluster = Struct.new(:name) unless defined?(Cluster)
   Cluster.class_eval do
     cattr_accessor :all
     self.all = {}
-    def initialize *args
-      super *args
-      raise "duplicate cluster #{name}" if self.class.all[name]
+    def initialize _name, *args
+      super _name, *args
+      self.name = _name.to_sym
+      # raise "duplicate cluster #{name}" if self.class.all[name]
       self.class.all[name] = self
     end
 
+    def status
+      [ self.class, self.name,
+        mounts.first.class, mounts.map(&:status).join(', ')
+      ].map(&:to_s).join(" - ")
+    end
+
+    # make the cluster ready: all its nodes and mounts are created, available and attached
+    def make_ready!
+      instantiate!
+      attach!
+    end
+    # a cluster is ready when all its nodes and mounts are ready
+    # (created, available, and attached)
+    def ready?
+      are_all(nodes, :ready?) && are_all(mounts,:ready?)
+    end
+
     # Put away this cluster:
-    # * ensure all volumes are detached
-    # * snapshot all volumes
-    # * ... wait a bit ...
-    # * for every snapshot on this cluster that was completed in the last hour,
-    #   - delete its corresponding volume
-    #   - delete all snapshots older than it
-    def put_away_volumes
-      mounts.sort.each do |mount|
-        puts "Putting away\t#{mount.description}"
-        # puts `echo ec2-create-snapshot -d '#{mount.handle}' #{mount.volume_id}`
-        p ClusterMount.from_handle(mount.handle)
-      end
+    # * ensure all mounts are separated
+    # * ensure all mounts are snapshotted
+    # * put away all nodes and put away all mounts
+    def put_away!
+      separate!
+      snapshot!
+      delete!
+    end
+    # a cluster is away if all its nodes and mounts are away (no longer running)
+    def away?
+      are_all(nodes, :away?) && are_all(mounts, :away?)
     end
 
-    def detach_volumes *args
-      mounts.each(&:detach!)
+    # instantiate the cluster by ensuring all nodes and all mounts are instantiated
+    def instantiate!
+      attempt_waiting_until :instantiated? do
+        nodes.each(&:instantiate!)
+        mounts.each(&:instantiate!)
+        Log.info ['instantiating', status].join(' - ')
+      end
+    end
+    # are all the nodes and mounts instantiated?
+    def instantiated?
+      are_all(nodes, &:instantiated?) && are_all(mounts, &:instantiated?)
     end
 
-    def ensure_volumes_are_detached
-      10.times do
-        still_attached = mounts.find_all{|mount| mount.attached?}
-        if still_attached.blank? then Log.info "All mounts for the #{name} cluster are detached"; return true ; end
-        still_attached.each{|mount| mount.detach! }
-        $stderr.puts "Wating on #{still_attached.length} nodes: #{still_attached.map(&:volume_id).inspect}"
-        sleep 2
+    def attach!
+      attempt_waiting_until :attached? do
+        mounts.each(&:attach!)
+        Log.info ['attaching', status].join(' - ')
       end
-      return false
+    end
+    # are all mounts attached to their nodes?
+    def attached?
+      are_all(mounts, &:attached?)
     end
 
-    def snapshots
-      snaps = []
-      mounts.each do |mount|
-        snaps += mount.snapshots
+    # Ask each mount to separate from its node
+    def separate!
+      attempt_waiting_until :separated? do
+        mounts.each(&:separate!)
+        Log.info ['separating', status].join(' - ')
       end
-      snaps
+    end
+    # are all mounts separated from their nodes?
+    def separated?
+      are_all(mounts, &:separated?)
     end
 
     # Ask each mount to create a snapshot of its volume, including metadata in
     # the description to make it recoverable
-    def snapshot_volumes
-      mounts.each do |mount|
-        mount.create_snapshot
+    def snapshot!
+      raise "out of order - tried to snapshot while not separated" if (! separated?)
+      attempt_waiting_until :recently_snapshotted? do
+        mounts.each(&:snapshot!)
+        Log.info ['snapshotting', status].join(' - ')
+        Log.info MockSnapshot.snapshots.values.map(&:status).join(' - ')
       end
     end
-
-    def delete_old_snapshots *args
-      mounts.each do |mount|
-        mount.delete_old_snapshots *args
-      end
+    # have all mounts been recently snapshotted?
+    def recently_snapshotted?
+      are_all(mounts, &:recently_snapshotted?)
     end
 
-    def delete_volumes_with_recent_snapshots
-      mounts.each do |mount|
-        mount.delete_volume_if_has_recent_snapshot!
+    # Ask each mount to delete its volume, including metadata in
+    # the description to make it recoverable
+    def delete!
+      raise "out of order - tried to delete while not snapshotted" if (! recently_snapshotted?)
+      attempt_waiting_until :deleted? do
+        mounts.each(&:delete!)
+        Log.info ['deleting', status].join(' - ')
       end
     end
+    # have all mounts been deleted?
+    def deleted?
+      are_all(mounts, &:deleted?)
+    end
 
-    # Hash of volumes, indexed by [role, node_idx, node_vol_idx]
+    #
+    # Bookkeeping of nodes and mounts
+    #
+
+    # Hash of mounts, indexed by [role, node_idx, node_vol_idx]
     # Ex:
-    #    p cluster.volumes[['master', 0, 0]]
-    #    => #<struct Ec2Volume cluster="gibbon", role="master", node_idx=0, volume_idx=0, device="/dev/sdh", mount_point="/mnt/home", volume_id="vol-1cfa0475">
+    #    p cluster.mounts[['master', 0, 0]]
+    #    => #<struct Wucluster::Mount cluster="gibbon", role="master", node=<Wucluster::Node ...>, mount_idx=0, device="/dev/sdh", mount_point="/mnt/home", volume=#<Wucluster::Ec2Volume ...> >
     def all_mounts
       @all_mounts ||= load_mounts!
     end
@@ -83,30 +126,71 @@ module Wucluster
       all_mounts.sort.map(&:last)
     end
 
-    #
-    # interface to cluster definition from cloudera config files
-    #
+    # Hash of nodes, indexed by [role, node_idx, node_vol_idx]
+    # Ex:
+    #    p cluster.nodes[['master', 0, 0]]
+    #    => #<struct Wucluster::Node cluster="gibbon", role="master", idx=0, node=...>
+    def all_nodes
+      @all_nodes ||= load_nodes!
+    end
+    # flat list of nodes
+    def nodes
+      all_nodes.map(&:last)
+    end
 
-    # The raw cluster_role_node_volume_tree from the cloudera EC2 cluster
-    # description file
-    def cluster_role_node_mount_tree
-      @cluster_role_node_mounts ||= JSON.load(File.open(HADOOP_EC2_DIR+"/ec2-storage-#{name}.json"))
+    # flat list of snapshots from all mounts
+    def snapshots
+      snaps = []
+      mounts.each do |mount|
+        snaps += mount.snapshots
+      end
+      snaps
     end
 
     # Turn the cluster_role_node_mount_tree into a flat list of mounts,
     # an hash indexed by [role,node_idx,node_vol_idx]
+    # interface to cluster definition from cloudera config files
     def load_mounts!
       @all_mounts = {}
       cluster_role_node_mount_tree.each do |role, cluster_node_mounts|
         cluster_node_mounts.each_with_index do |mounts, node_idx|
           mounts.each_with_index do |mount, node_vol_idx|
             @all_mounts[[role, node_idx, node_vol_idx]] =
-              ClusterMount.new(name, role, node_idx, node_vol_idx, mount['device'], mount['mount_point'], mount['volume_id'])
+              Mount.new(name, role, node_idx, node_vol_idx, mount['device'], mount['mount_point'], mount['volume_id'])
           end
         end
       end
       @all_mounts
     end
 
+  private
+    # attempt_waiting_until test, [sleep_time]
+    #
+    # * runs block
+    # * tests for completion by calling (on self) the no-arg method +test+
+    # * if the test fails, sleep for a bit...
+    # * ... and then try again
+    #
+    # will only attempt MAX_TRIES times
+    def attempt_waiting_until test, sleep_time=0.5, &block
+      MAX_TRIES.times do
+        yield
+        break if self.send(test)
+        sleep sleep_time
+      end
+    end
+
+    # the boolean "and" of calling block on each mount -- returns false if any
+    # of the block calls returns false, true only if they are all true.
+    def are_all collection, &block
+      collection.each{|obj| return false if (! yield(obj)) }
+      return true
+    end
+
+    # The raw cluster_role_node_volume_tree from the cloudera EC2 cluster
+    # description file
+    def cluster_role_node_mount_tree
+      @cluster_role_node_mounts ||= JSON.load(File.open(HADOOP_EC2_DIR+"/ec2-storage-#{name}.json"))
+    end
   end
 end

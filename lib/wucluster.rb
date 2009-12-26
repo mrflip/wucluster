@@ -4,16 +4,16 @@ require 'wukong/extensions'
 require 'wukong/extensions/hash_keys'
 require 'AWS'
 load File.dirname(__FILE__)+'/AWS/EC2/snapshot.rb'
-require 'AWS/EC2/mock'
-autoload :Log, 'wucluster/logger'
+load File.dirname(__FILE__)+'/AWS/EC2/mock.rb'
+autoload :Log, 'wukong/logger'
 
 module Wucluster
   CONFIG_DIR = ENV['HOME']+'/.hadoop-ec2'
 
-  autoload :Cluster,      'wucluster/cluster'
-  autoload :ClusterMount, 'wucluster/cluster_mount'
-  autoload :Ec2Volume,    'wucluster/ec2_volume'
-  autoload :Ec2Snapshot,  'wucluster/ec2_snapshot'
+  # autoload :Cluster,      'wucluster/cluster'
+  # autoload :ClusterMount, 'wucluster/cluster_mount'
+  # autoload :Ec2Volume,    'wucluster/ec2_volume'
+  # autoload :Ec2Snapshot,  'wucluster/ec2_snapshot'
 
   #
   # single point of access to AWS calls
