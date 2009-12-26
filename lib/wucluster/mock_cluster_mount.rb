@@ -140,7 +140,6 @@ module Wucluster
   end
 
   class MockMount
-    delegate :state, :attach!, :attached?, :instantiated?, :delete!, :deleted?, :to => :volume
     include MockEC2Device
     attr_accessor :volume, :vol_id
     def initialize vol_id
@@ -154,6 +153,7 @@ module Wucluster
       "#{volume && volume.status}"
     end
 
+    delegate :state, :attach!, :attached?, :instantiated?, :delete!, :deleted?, :to => :volume
     def separate!
       return if (!volume) || (volume.detached?)
       volume.detach!

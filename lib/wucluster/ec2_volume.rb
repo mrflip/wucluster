@@ -47,7 +47,7 @@ module Wucluster
     #
 
     def mount
-      ClusterMount.find(id)
+      Mount.find(id)
     end
 
     def mount_handle

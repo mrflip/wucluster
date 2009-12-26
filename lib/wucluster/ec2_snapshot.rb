@@ -56,7 +56,7 @@ module Wucluster
     end
 
     def mount_point
-      @mount_point ||= ClusterMount.from_handle volume_handle
+      @mount_point ||= Mount.from_handle volume_handle
     end
 
     #
@@ -88,7 +88,7 @@ module Wucluster
     end
 
     def valid_for_?
-      ClusterMount.from_handle volume_handle
+      Mount.from_handle volume_handle
     end
 
   protected
