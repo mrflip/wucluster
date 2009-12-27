@@ -10,10 +10,12 @@ autoload :Log, 'wukong/logger'
 module Wucluster
   CONFIG_DIR = ENV['HOME']+'/.hadoop-ec2'
 
-  # autoload :Cluster,      'wucluster/cluster'
-  # autoload :ClusterMount, 'wucluster/cluster_mount'
-  # autoload :Ec2Volume,    'wucluster/ec2_volume'
-  # autoload :Ec2Snapshot,  'wucluster/ec2_snapshot'
+  autoload :Cluster,      'wucluster/cluster'
+  autoload :Mount, 'wucluster/mount'
+  autoload :Node, 'wucluster/node'
+  autoload :Ec2Volume,    'wucluster/ec2_volume'
+  autoload :Ec2Instance,    'wucluster/ec2_instance'
+  autoload :Ec2Snapshot,  'wucluster/ec2_snapshot'
 
   #
   # single point of access to AWS calls

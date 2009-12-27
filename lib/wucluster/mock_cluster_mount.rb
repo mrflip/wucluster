@@ -42,7 +42,7 @@ module Wucluster
     end
   end
 
-  class MockCluster < Wucluster::Cluster
+  class MockCluster < Cluster
     cattr_accessor :last_id; self.last_id = 0
     def load_mounts!
       @mounts = {}
@@ -64,7 +64,7 @@ module Wucluster
     end
   end
 
-  class MockInstance
+  class MockInstance < Ec2Instance
     include MockEC2Device
     attr_accessor :state, :id
     def initialize id
@@ -72,7 +72,7 @@ module Wucluster
     end
   end
 
-  class MockNode
+  class MockNode < Node
     include MockEC2Device
     attr_accessor :state, :instance
     def initialize instance_id
@@ -86,7 +86,7 @@ module Wucluster
     end
   end
 
-  class MockVolume
+  class MockVolume < Ec2Volume
     include MockEC2Device
     attr_accessor :state, :vol_id
     def initialize vol_id
@@ -139,9 +139,11 @@ module Wucluster
     end
   end
 
-  class MockMount
+  class MockMount < Mount
     include MockEC2Device
     attr_accessor :volume, :vol_id
+    delegate :state, :attach!, :attached?, :instantiated?, :delete!, :deleted?, :to => :volume
+    delegate :size, :region, :state, :created_at, :to => :volume
     def initialize vol_id
       self.vol_id = vol_id
     end
@@ -152,26 +154,9 @@ module Wucluster
     def status
       "#{volume && volume.status}"
     end
-
-    delegate :state, :attach!, :attached?, :instantiated?, :delete!, :deleted?, :to => :volume
-    def separate!
-      return if (!volume) || (volume.detached?)
-      volume.detach!
-    end
-    def separated?
-      return true if !volume
-      volume.detached?
-    end
-    def snapshot!
-      MockSnapshot.create(volume)
-    end
-    def recently_snapshotted?
-      snapshot = MockSnapshot.get_last_snapshot(volume) or return
-      snapshot.recent?
-    end
   end
 
-  class MockSnapshot
+  class MockSnapshot # < Ec2Snapshot
     include MockEC2Device
     attr_accessor :state, :volume, :created_at
     cattr_accessor :snapshots

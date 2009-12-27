@@ -23,7 +23,7 @@ module Wucluster
     #
     delegate :state, :attach!, :attached?, :instantiated?, :delete!, :deleted?, :to => :volume
     delegate :size, :region, :state, :created_at, :to => :volume
-    
+
     def separate!
       return if (!volume) || (volume.detached?)
       volume.detach!
