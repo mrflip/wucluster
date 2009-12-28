@@ -35,11 +35,22 @@ describe 'Wucluster::Cluster' do
   end
 
   describe 'when asked to delete' do
+    before do
+      @cluster = Wucluster::MockCluster.new(:test)
+    end
     it 'will raise an error if you try to delete while not recently snapshotted' do
       @cluster.should_receive(:recently_snapshotted?).and_return(false)
-      @cluster.delete!.should_raise()
+      lambda{ @cluster.delete! }.should raise_error(Exception)
     end
-    it 'will delete all its nodes'
+    it 'will delete all its nodes' do
+      @cluster.should_receive(:recently_snapshotted?).and_return(true)
+      mount = mock 'vol_0';
+      mount.stub(:status)
+      mount.should_receive(:delete!)
+      mount.should_receive(:deleted?).and_return true
+      @cluster.stub(:mounts).and_return [mount]
+      @cluster.delete!
+    end
     it 'will delete all its mounts'
   end
 
