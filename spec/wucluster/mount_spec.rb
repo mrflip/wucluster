@@ -31,37 +31,57 @@ describe 'Wucluster::Mount' do
       @mount.ready?.should be_false
     end
 
-    [:attach!, :detach!, :instantiate!, :delete!,
-      :state, :attached?, :detached?,
+    it 'is     separated when its volume is instantiated and detached' do
+      @mount.should_receive(:instantiated?).at_least(:once).and_return(true)
+      @mount.stub(:instantiating?).and_return(false)
+      @mount.should_receive(:detached?).and_return(true)
+      @mount.separated?.should be_true
+    end
+    it 'is not separated when its volume is instantiated and not detached' do
+      @mount.should_receive(:instantiated?).at_least(:once).and_return(true)
+      @mount.stub(:instantiating?).and_return(false)
+      @mount.should_receive(:detached?).and_return(false)
+      @mount.separated?.should be_false
+    end
+    it 'is     separated when is not instantiated and not instantiating' do
+      @mount.should_receive(:instantiated?).at_least(:once).and_return(false)
+      @mount.should_receive(:instantiating?).and_return(false)
+      @mount.stub(:detached?).and_return(true)
+      @mount.separated?.should be_true
+    end
+    it 'is not separated when it is instantiating' do
+      @mount.should_receive(:instantiated?).at_least(:once).and_return(false)
+      @mount.should_receive(:instantiating?).and_return(true)
+      @mount.stub(:detached?).and_return(true)
+      @mount.separated?.should be_false
+    end
+
+    [
+      :attach!,    :detach!,    :delete!,
+      :attached?,  :detached?,
+      :attaching?, :detaching?, :instantiating?,
     ].each do |method|
       it "delegates #{method} to its volume" do
-        @mount.should_receive(method).and_return 'fnord'
+        @volume.should_receive(method).and_return 'fnord'
         @mount.send(method).should == 'fnord'
       end
     end
 
+    it 'is     instantiated when its volume is instantiated and it is '
+    it 'is not instantiated when its volume is instantiating, deleting or absent'
     #
-    # [:attaching, :attached, :detaching, :detached].each do |state|
-    #   it "is     instantiated when its volume is instantiated and it is #{state}" do
-    #   @volume.should_receive(:instantiated?).and_return(true)
-    #     @volume.should_receive(:state).at_least(:once).and_return(state)
-    #     @mount.instantiated?.should be_true
+    it 'is not instantiated when its volume is not in the list of all volumes'
+    it 'is not absent when its volume is in the list of all volumes'
+
+    #
+    # it 'is painted dirty after any imperative (attach!, detach!, instantiate!, delete!)'
+    # [:attached?, :detached?, :attaching?, :detaching?, :instantiating?, :instantiated?].each do |method|
+    #   it "on #{method} refreshes its volume if dirty" do
+    #     @mount.should_receive(:refresh_if_dirty!)
+    #     @volume.stub(method).and_return(true)
+    #     @mount.send(method)
     #   end
     # end
-    # it 'is     instantiated when its volume is instantiated and it is '
-    # it 'is not instantiated when its volume is instantiating, deleting or absent'
-    # #
-    # it 'is     separated when its volume is instantiated and detached'
-    # it 'is not separated when its volume is attached, attaching or detaching'
-    # it 'is     separated when its volume is absent or deleting'
-    # it 'is not separated when its volume is instantiating'
-    #
-    it 'is     absent when its volume is not in the list of all volumes'
-    it 'is not absent when its volume is in the list of all volumes'
-    #
-    it 'is painted dirty after any imperative (attach!, detach!, instantiate!, delete!)'
-    it 'on any request for state,     refreshes    its volume if it is dirty'
-    it 'on any request for state, does not refresh its volume if it is dirty'
   end
 
   # imperatives:  attach!, detach!, instantiate!, delete!

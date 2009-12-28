@@ -4,43 +4,6 @@
 #
 
 module Wucluster
-  MAX_TRIES = 14
-
-  #
-  # Simulates an event that takes a random amount of time
-  #
-  class RandomCountdownTimer
-    # range of times to simulate
-    attr_accessor :range
-    # time the current iteration completes
-    attr_accessor :finishes_at
-    # initialize with the max amount of time to simulate -- will take an arbitrary
-    # number of seconds between 0 and range
-    def initialize range=2.0
-      self.range = range
-      start!
-    end
-    # starts a countdown timer
-    def start!
-      self.finishes_at = Time.now + self.range*rand() if ((!finishes_at) || finished?)
-    end
-    # true if the simulated even should report being done
-    def finished?
-      finishes_at && (Time.now > finishes_at)
-    end
-    def remaining
-      finishes_at - Time.now
-    end
-  end
-
-  module MockEC2Device
-    private
-    def start_transition transition_state
-      @transition_timer ||= RandomCountdownTimer.new
-      @transition_timer.start!
-      self.state = transition_state
-    end
-  end
 
   class MockCluster < Cluster
     cattr_accessor :last_id; self.last_id = 0
@@ -66,7 +29,7 @@ module Wucluster
 
   class MockInstance < Ec2Instance
     include MockEC2Device
-    attr_accessor :state, :id
+    attr_accessor :status, :id
     def initialize id
       self.id = id
     end
@@ -75,74 +38,73 @@ module Wucluster
   class MockNode < Node
     include MockEC2Device
     attr_accessor :instance
-    delegate :state, :attach!, :attached?, :delete!, :deleted?, :to => :instance
+    delegate :status, :attach!, :attached?, :delete!, :deleted?, :to => :instance
     def initialize instance_id
       self.instance = MockInstance.new(instance_id)
     end
     def instantiate!
-      p [:instantiate, state, instance]
-      self.instance.state = :instantiated
+      p [:instantiate, status, instance]
+      self.instance.status = :instantiated
     end
     def instantiated?
-      state == :instantiated
+      status == :instantiated
     end
-
     def ready?
-      p state
+      p status
       instantiated?
     end
   end
 
   class MockVolume < Ec2Volume
     include MockEC2Device
-    attr_accessor :state, :vol_id
+    attr_accessor :status, :vol_id
     def initialize vol_id
-      self.state = nil
+      self.status = nil
       self.vol_id = vol_id
     end
-    def status
-      [vol_id, state,
+    def to_s
+      [vol_id, status,
         @transition_timer ? @transition_timer.remaining : nil,
         @transition_timer ? @transition_timer.finished? : nil,
       ].compact.map(&:to_s).join(" ")
     end
 
     def instantiate! vol_id
-      return if [:instantiating, :instantiated, :attaching, :attached, :detaching, :detached].include?(state)
+      return if [:instantiating, :instantiated, :attaching, :attached, :detaching, :detached].include?(status)
       start_transition :instantiating
-      Log.debug "FIXME instantiate #{status}"
+      Log.debug "FIXME instantiate #{self}"
     end
     def attach!
-      return if [:attaching, :attached].include?(state)
-      raise "can't attach: #{state}" if [:deleting, :deleted].include?(state)
+      return if [:attaching, :attached].include?(status)
+      raise "can't attach: #{status}" if [:deleting, :deleted].include?(status)
       start_transition :attaching
-      Log.debug "FIXME attach #{status}"
+      Log.debug "FIXME attach #{self}"
     end
     def detach!
-      return if [:detaching, :detached, :deleting, :deleted].include?(state)
+      return if [:detaching, :detached, :deleting, :deleted].include?(status)
       start_transition :detaching
     end
     def delete!
-      return if [:deleting, :deleted].include?(state)
+      return if [:deleting, :deleted].include?(status)
       start_transition :deleting
-      Log.debug "FIXME delete #{status}"
+      Log.debug "FIXME delete #{self}"
     end
 
     def instantiated?
-      self.state = :instantiated  if state == :instantiating && @transition_timer.finished?
-      [:instantiated, :detaching, :detached, :attaching, :attached].include?(state)
+      self.status = :instantiated  if status == :instantiating && @transition_timer.finished?
+      [:instantiated, :detaching, :detached, :attaching, :attached].include?(status)
     end
     def attached?
-      self.state = :attached      if state == :attaching     && @transition_timer.finished?
-      [:attached].include?(state)
+      self.status = :attached      if status == :attaching     && @transition_timer.finished?
+      [:attached].include?(status)
     end
     def detached?
-      self.state = :detached      if state == :detaching     && @transition_timer.finished?
-      [:deleted, :deleting, :detached].include?(state)
+      self.status = :detached      if status == :detaching     && @transition_timer.finished?
+      [:deleted, :deleting, :detached].include?(status)
     end
     def deleted?
-      self.state = :deleted       if state == :deleting      && @transition_timer.finished?
-      [:deleted].include?(state)
+      self.status = :deleted       if status == :deleting      && @transition_timer.finished?
+      [:deleted].include?(status)
     end
   end
 
@@ -161,7 +123,7 @@ module Wucluster
 
   class MockSnapshot # < Ec2Snapshot
     include MockEC2Device
-    attr_accessor :state, :volume, :created_at
+    attr_accessor :status, :volume, :created_at
     cattr_accessor :snapshots
     self.snapshots = {}
     SNAPSHOT_RECENTNESS_TIME = 2 * 60 * 60 # two hours
@@ -171,16 +133,16 @@ module Wucluster
       start_transition :snapshotting
       self.created_at = Time.now + @transition_timer.remaining # kludge
     end
-    def status
-      [Time.now - created_at, @transition_timer.finished?, state, snapshotted?, recent?]
+    def to_s
+      [Time.now - created_at, @transition_timer.finished?, status, snapshotted?, recent?]
     end
     def recent?
       snapshotted? && ( (Time.now - self.created_at) < SNAPSHOT_RECENTNESS_TIME )
     end
 
     def snapshotted?
-      self.state = :snapshotted if state == :snapshotting && @transition_timer.finished?
-      [:snapshotted].include?(state)
+      self.status = :snapshotted if status == :snapshotting && @transition_timer.finished?
+      [:snapshotted].include?(status)
     end
     def self.get_last_snapshot volume
       self.snapshots[volume.vol_id]

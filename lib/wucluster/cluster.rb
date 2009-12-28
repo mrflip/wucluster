@@ -14,9 +14,9 @@ module Wucluster
       self.class.all[name] = self
     end
 
-    def status
+    def to_s
       [ self.class, self.name,
-        mounts.first.class, mounts.map(&:status).join(', ')
+        # mounts.first.class, mounts.map(&:to_s).join(', ')
       ].map(&:to_s).join(" - ")
     end
 
@@ -42,7 +42,7 @@ module Wucluster
     end
     # a cluster is away if all its nodes and mounts are away (no longer running)
     def away?
-      are_all(nodes, :away?) && are_all(mounts, :away?)
+      are_all(nodes, &:away?) && are_all(mounts, &:away?)
     end
 
     # instantiate the cluster by ensuring all nodes and all mounts are instantiated
@@ -50,7 +50,7 @@ module Wucluster
       attempt_waiting_until :instantiated? do
         nodes.each(&:instantiate!)
         mounts.each(&:instantiate!)
-        Log.info ['instantiating', status].join(' - ')
+        Log.info "Instantiating #{self}"
       end
     end
     # are all the nodes and mounts instantiated?
@@ -61,7 +61,7 @@ module Wucluster
     def attach!
       attempt_waiting_until :attached? do
         mounts.each(&:attach!)
-        Log.info ['attaching', status].join(' - ')
+        Log.info "Attaching #{self}"
       end
     end
     # are all mounts attached to their nodes?
@@ -73,7 +73,7 @@ module Wucluster
     def separate!
       attempt_waiting_until :separated? do
         mounts.each(&:separate!)
-        Log.info ['separating', status].join(' - ')
+        Log.info "Separating #{self}"
       end
     end
     # are all mounts separated from their nodes?
@@ -82,13 +82,13 @@ module Wucluster
     end
 
     # Ask each mount to create a snapshot of its volume, including metadata in
-    # the description to make it recoverable
+    # to make it recoverable
     def snapshot!
       raise "out of order - tried to snapshot while not separated" if (! separated?)
       attempt_waiting_until :recently_snapshotted? do
         mounts.each(&:snapshot!)
-        Log.info ['snapshotting', status].join(' - ')
-        Log.info MockSnapshot.snapshots.values.map(&:status).join(' - ')
+        Log.info "Snapshotting #{self}"
+        Log.info MockSnapshot.snapshots.values.map(&:to_s).join(' - ')
       end
     end
     # have all mounts been recently snapshotted?
@@ -96,18 +96,19 @@ module Wucluster
       are_all(mounts, &:recently_snapshotted?)
     end
 
-    # Ask each mount to delete its volume, including metadata in
-    # the description to make it recoverable
+    # Ask each mount to delete its volume
     def delete!
+      raise "Tried to delete while not separated"                  if (! separated?)
       raise "out of order - tried to delete while not snapshotted" if (! recently_snapshotted?)
       attempt_waiting_until :deleted? do
         mounts.each(&:delete!)
-        Log.info ['deleting', status].join(' - ')
+        nodes.each(&:delete!)
+        Log.info "Deleting #{self}"
       end
     end
     # have all mounts been deleted?
     def deleted?
-      are_all(mounts, &:deleted?)
+      are_all(mounts, &:deleted?) && are_all(nodes,  &:deleted?)
     end
 
     #
@@ -172,11 +173,11 @@ module Wucluster
     # * ... and then try again
     #
     # will only attempt MAX_TRIES times
-    def attempt_waiting_until test, sleep_time=0.5, &block
+    def attempt_waiting_until test, &block
       MAX_TRIES.times do
         yield
         break if self.send(test)
-        sleep sleep_time
+        sleep SLEEP_TIME
       end
     end
 
@@ -187,8 +188,7 @@ module Wucluster
       return true
     end
 
-    # The raw cluster_role_node_volume_tree from the cloudera EC2 cluster
-    # description file
+    # The raw cluster_role_node_volume_tree from the cloudera EC2 cluster file
     def cluster_role_node_mount_tree
       @cluster_role_node_mounts ||= JSON.load(File.open(HADOOP_EC2_DIR+"/ec2-storage-#{name}.json"))
     end

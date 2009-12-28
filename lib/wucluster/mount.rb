@@ -12,8 +12,9 @@ module Wucluster
     cattr_accessor :all
     self.all = {}
     delegate(:state, 
-      :attach!, :detach!, :delete!,
-      :attached?, :detached?,
+      :attach!,    :detach!,    :delete!,
+      :attached?,  :detached?,
+      :attaching?, :detaching?, :instantiating?, :deleting?
       :size,  :region, :state, :created_at,
       :to => :volume)
 
@@ -23,30 +24,49 @@ module Wucluster
       # self.coerce_to_int!(:node_vol_idx, true)
       self.class.all[volume_id] = self
     end
-
-    def instantiate!
-      self.volume ||= Ec2Volume.new
-      volume.instantiate!
-    end
     
-    def status
-      "#{volume && volume.status}"
+    def to_s
+      '#<' + [
+        self.class.to_s,
+        volume ? 'no volume' : volume.to_s,
+      ].join(' ') + '>'
     end
 
     #
     # Imperatives
     #
-
-    def ready?
-      instantiated? && attached?
+    def instantiate!
+      self.volume ||= Ec2Volume.new
+      volume.instantiate!
     end
     def separate!
       return if (!volume) || (volume.detached?)
       volume.detach!
     end
+    
+    def ready?
+      instantiated? && attached?
+    end
     def separated?
-      return true if !volume
-      volume.detached?
+      ((! instantiated?) && (! instantiating?)) ||
+      (instantiated? && detached?) 
+    end
+
+    def instantiated?
+      volume && volume.instantiated?
+    end
+    # def attached?() refresh_if_dirty! ; volume.attached? ;           end
+    # def detached?() refresh_if_dirty! ; volume.detached? ;           end
+    # def attaching?() refresh_if_dirty! ; volume.attaching? ;         end
+    # def detaching?() refresh_if_dirty! ; volume.detaching? ;         end
+    # def instantiating?() refresh_if_dirty! ; volume.instantiating? ; end
+    # def deleting?() refresh_if_dirty! ; volume.deleting? ;           end
+
+    #
+    # Volume Cache
+    #
+    def refresh_if_dirty!
+      true
     end
 
     #
@@ -70,7 +90,7 @@ module Wucluster
     #   [cluster, role, "%02d"%node_idx, "%02d"%node_vol_idx, device, mount_point, volume_id].join("+")
     # end
     # # readable-ish description
-    # def description
+    # def to_s
     #   # "%-15s\tvolume for\t%15s\t%-7s\tnode #\t%7d\t%7d" % [mount_point, cluster, role, node_idx, node_vol_idx]
     #   handle.gsub(/\+/,"\t")
     # end
@@ -149,7 +169,7 @@ end
     # def delete_old_snapshots
     #   # order by date
     #   old_snapshots = snapshots.sort_by(&:created_at)
-    #   old_snapshots = old_snapshots.find_all{|snapshot| snapshot.status == "completed"}
+    #   old_snapshots = old_snapshots.find_all{|snapshot| snapshot.to_s == "completed"}
     #   # remove the last
     #   newest = old_snapshots.pop
     #   Log.info "Keeping  #{newest.description}" if newest

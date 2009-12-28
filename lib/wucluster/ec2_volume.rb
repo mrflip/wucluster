@@ -11,7 +11,7 @@ module Wucluster
   Ec2Volume.class_eval do
 
     #
-    # States
+    # Statuses
     #
 
     def detached?
@@ -72,7 +72,7 @@ module Wucluster
       volumes_map[volume_id.to_s] # || self.load_volume(volume_id)
     end
 
-    # refreshes info from AWS, flushing any current state
+    # refreshes info from AWS, flushing any current status
     def refresh!
       merge! self.class.load_volume(self.id)
     end

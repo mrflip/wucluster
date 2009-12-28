@@ -1,3 +1,4 @@
+$: << File.dirname(__FILE__)
 require 'json'
 require 'yaml'
 require 'active_support'
@@ -7,9 +8,12 @@ require 'AWS'
 require File.dirname(__FILE__)+'/AWS/EC2/snapshot'
 require File.dirname(__FILE__)+'/AWS/EC2/mock'
 require 'wukong/logger'
+require 'wucluster/mock'
 
 module Wucluster
   CONFIG_DIR = ENV['HOME']+'/.hadoop-ec2'
+  MAX_TRIES  = 14
+  SLEEP_TIME = 0.5 unless defined?(SLEEP_TIME)
 
   autoload :Cluster,     'wucluster/cluster'
   autoload :Mount,       'wucluster/mount'
@@ -17,7 +21,7 @@ module Wucluster
   autoload :Ec2Volume,   'wucluster/ec2_volume'
   autoload :Ec2Instance, 'wucluster/ec2_instance'
   autoload :Ec2Snapshot, 'wucluster/ec2_snapshot'
-  require File.dirname(__FILE__)+'/wucluster/mock_cluster_mount'
+  require 'wucluster/mock_cluster_mount'
 
   #
   # single point of access to AWS calls
