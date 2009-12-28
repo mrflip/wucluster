@@ -107,9 +107,10 @@ module Wucluster
       ].compact.map(&:to_s).join(" ")
     end
 
-    def detach!
-      return if [:detaching, :detached, :deleting, :deleted].include?(state)
-      start_transition :detaching
+    def instantiate! vol_id
+      return if [:instantiating, :instantiated, :attaching, :attached, :detaching, :detached].include?(state)
+      start_transition :instantiating
+      Log.debug "FIXME instantiate #{status}"
     end
     def attach!
       return if [:attaching, :attached].include?(state)
@@ -117,28 +118,27 @@ module Wucluster
       start_transition :attaching
       Log.debug "FIXME attach #{status}"
     end
+    def detach!
+      return if [:detaching, :detached, :deleting, :deleted].include?(state)
+      start_transition :detaching
+    end
     def delete!
       return if [:deleting, :deleted].include?(state)
       start_transition :deleting
       Log.debug "FIXME delete #{status}"
-    end
-    def instantiate! vol_id
-      return if [:instantiating, :instantiated, :attaching, :attached, :detaching, :detached].include?(state)
-      start_transition :instantiating
-      Log.debug "FIXME instantiate #{status}"
     end
 
     def instantiated?
       self.state = :instantiated  if state == :instantiating && @transition_timer.finished?
       [:instantiated, :detaching, :detached, :attaching, :attached].include?(state)
     end
-    def detached?
-      self.state = :detached      if state == :detaching     && @transition_timer.finished?
-      [:deleted, :deleting, :detached].include?(state)
-    end
     def attached?
       self.state = :attached      if state == :attaching     && @transition_timer.finished?
       [:attached].include?(state)
+    end
+    def detached?
+      self.state = :detached      if state == :detaching     && @transition_timer.finished?
+      [:deleted, :deleting, :detached].include?(state)
     end
     def deleted?
       self.state = :deleted       if state == :deleting      && @transition_timer.finished?
@@ -149,21 +149,13 @@ module Wucluster
   class MockMount < Mount
     include MockEC2Device
     attr_accessor :volume, :vol_id
-    delegate :state, :attach!, :attached?, :instantiated?, :delete!, :deleted?, :to => :volume
-    delegate :size,  :region, :state, :created_at, :to => :volume
     def initialize vol_id
       self.vol_id = vol_id
     end
+
     def instantiate!
       self.volume ||= MockVolume.new(vol_id)
       volume.instantiate! vol_id
-    end
-    def status
-      "#{volume && volume.status}"
-    end
-
-    def ready?
-      instantiated? && attached?
     end
   end
 

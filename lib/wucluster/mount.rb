@@ -11,19 +11,35 @@ module Wucluster
   Mount.class_eval do
     cattr_accessor :all
     self.all = {}
+    delegate(:state, 
+      :attach!, :detach!, :delete!,
+      :attached?, :detached?,
+      :size,  :region, :state, :created_at,
+      :to => :volume)
+
     def initialize *args
       super *args
-      self.coerce_to_int!(:node_idx,   true)
-      self.coerce_to_int!(:node_vol_idx, true)
+      # self.coerce_to_int!(:node_idx,   true)
+      # self.coerce_to_int!(:node_vol_idx, true)
       self.class.all[volume_id] = self
+    end
+
+    def instantiate!
+      self.volume ||= Ec2Volume.new
+      volume.instantiate!
+    end
+    
+    def status
+      "#{volume && volume.status}"
     end
 
     #
     # Imperatives
     #
-    delegate :state, :attach!, :attached?, :instantiated?, :delete!, :deleted?, :to => :volume
-    delegate :size, :region, :state, :created_at, :to => :volume
 
+    def ready?
+      instantiated? && attached?
+    end
     def separate!
       return if (!volume) || (volume.detached?)
       volume.detach!
@@ -32,12 +48,20 @@ module Wucluster
       return true if !volume
       volume.detached?
     end
+
+    #
+    # Snapshot
+    #
+    
     def snapshot!
       MockSnapshot.create(volume)
     end
+    def last_snapshot
+      MockSnapshot.get_last_snapshot(volume)
+    end
     def recently_snapshotted?
-      snapshot = MockSnapshot.get_last_snapshot(volume) or return
-      snapshot.recent?
+      snapshot = last_snapshot
+      snapshot && snapshot.recent?
     end
 
     # # Summary name for this volume
