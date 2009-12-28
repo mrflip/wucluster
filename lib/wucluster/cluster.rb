@@ -28,7 +28,7 @@ module Wucluster
     # a cluster is ready when all its nodes and mounts are ready
     # (created, available, and attached)
     def ready?
-      are_all(nodes, :ready?) && are_all(mounts,:ready?)
+      are_all(nodes, &:ready?) && are_all(mounts, &:ready?)
     end
 
     # Put away this cluster:

@@ -1,21 +1,23 @@
 require 'json'
 require 'yaml'
-require 'wukong/extensions'
-require 'wukong/extensions/hash_keys'
+require 'active_support'
+# require 'wukong/extensions'
+# require 'wukong/extensions/hash_keys'
 require 'AWS'
-load File.dirname(__FILE__)+'/AWS/EC2/snapshot.rb'
-load File.dirname(__FILE__)+'/AWS/EC2/mock.rb'
-autoload :Log, 'wukong/logger'
+require File.dirname(__FILE__)+'/AWS/EC2/snapshot'
+require File.dirname(__FILE__)+'/AWS/EC2/mock'
+require 'wukong/logger'
 
 module Wucluster
   CONFIG_DIR = ENV['HOME']+'/.hadoop-ec2'
 
-  autoload :Cluster,      'wucluster/cluster'
-  autoload :Mount, 'wucluster/mount'
-  autoload :Node, 'wucluster/node'
-  autoload :Ec2Volume,    'wucluster/ec2_volume'
-  autoload :Ec2Instance,    'wucluster/ec2_instance'
-  autoload :Ec2Snapshot,  'wucluster/ec2_snapshot'
+  autoload :Cluster,     'wucluster/cluster'
+  autoload :Mount,       'wucluster/mount'
+  autoload :Node,        'wucluster/node'
+  autoload :Ec2Volume,   'wucluster/ec2_volume'
+  autoload :Ec2Instance, 'wucluster/ec2_instance'
+  autoload :Ec2Snapshot, 'wucluster/ec2_snapshot'
+  require File.dirname(__FILE__)+'/wucluster/mock_cluster_mount'
 
   #
   # single point of access to AWS calls

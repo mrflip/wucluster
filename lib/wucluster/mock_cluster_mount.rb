@@ -74,15 +74,22 @@ module Wucluster
 
   class MockNode < Node
     include MockEC2Device
-    attr_accessor :state, :instance
+    attr_accessor :instance
+    delegate :state, :attach!, :attached?, :delete!, :deleted?, :to => :instance
     def initialize instance_id
       self.instance = MockInstance.new(instance_id)
     end
     def instantiate!
-      self.state = :instantiated
+      p [:instantiate, state, instance]
+      self.instance.state = :instantiated
     end
     def instantiated?
-      self.state == :instantiated
+      state == :instantiated
+    end
+
+    def ready?
+      p state
+      instantiated?
     end
   end
 
@@ -143,7 +150,7 @@ module Wucluster
     include MockEC2Device
     attr_accessor :volume, :vol_id
     delegate :state, :attach!, :attached?, :instantiated?, :delete!, :deleted?, :to => :volume
-    delegate :size, :region, :state, :created_at, :to => :volume
+    delegate :size,  :region, :state, :created_at, :to => :volume
     def initialize vol_id
       self.vol_id = vol_id
     end
@@ -153,6 +160,10 @@ module Wucluster
     end
     def status
       "#{volume && volume.status}"
+    end
+
+    def ready?
+      instantiated? && attached?
     end
   end
 
