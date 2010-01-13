@@ -15,27 +15,27 @@ describe 'Wucluster::Cluster' do
     end
 
     #
-    # Make ready
+    # launch
     #
-    it 'to make ready should instantiate its nodes and mounts, then attach mounts to nodes' do
+    it 'to launch should instantiate its nodes and mounts, then attach mounts to nodes' do
       @cluster.should_receive(:instantiate!)
       @cluster.should_receive(:attach!)
-      @cluster.make_ready!
+      @cluster.launch!
     end
-    it 'is ready when all nodes are ready and all mounts are ready' do
+    it 'is launched when all nodes are ready and all mounts are ready' do
       @cluster.should_receive(:are_all).with(@nodes).and_return(true)
       @cluster.should_receive(:are_all).with(@mounts).and_return(true)
-      @cluster.ready?.should be_true
+      @cluster.launched?.should be_true
     end
-    it 'is not ready when aa node is not ready' do
+    it 'is not launched when any node is not ready' do
       @node.should_receive(:ready?).and_return(false)
       @mount.stub(:ready?).and_return(true)
-      @cluster.ready?.should be_false
+      @cluster.launched?.should be_false
     end
-    it 'is not ready when any mount is not ready' do
+    it 'is not launched when any mount is not ready' do
       @node.stub(:ready?).and_return(true)
       @mount.should_receive(:ready?).and_return(false)
-      @cluster.ready?.should be_false
+      @cluster.launched?.should be_false
     end
 
     #

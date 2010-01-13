@@ -10,6 +10,8 @@ module Wucluster
     cattr_accessor :all
     self.all = {}
 
-
+    def instantiated?
+      status == :running
+    end
   end
 end

@@ -20,14 +20,14 @@ module Wucluster
       ].map(&:to_s).join(" - ")
     end
 
-    # make the cluster ready: all its nodes and mounts are created, available and attached
-    def make_ready!
+    # launch the cluster: all its nodes and mounts are created, available and attached
+    def launch!
       instantiate!
       attach!
     end
-    # a cluster is ready when all its nodes and mounts are ready
-    # (created, available, and attached)
-    def ready?
+    # a cluster is launched when all its nodes and mounts are ready
+    # (instantiated and attached)
+    def launched?
       are_all(nodes, &:ready?) && are_all(mounts, &:ready?)
     end
 

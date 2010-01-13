@@ -1,18 +1,58 @@
-= wucluster
+h1. wucluster - stateful control of cloud clusters
 
-Description goes here.
+Wucluster lets you spin up a cloud cluster of nodes and volumes, do your thing, and then put it away safely -- unmount and detach volumes, generate snapshots, and finally delete nodes and volumes, with interlocks to ensure your data persists.
 
-== Note on Patches/Pull Requests
- 
-* Fork the project.
-* Make your feature addition or bug fix.
-* Add tests for it. This is important so I don't break it in a
-  future version unintentionally.
-* Commit, do not mess with rakefile, version, or history.
-  (if you want to have your own version, that is fine but
-   bump version in a commit by itself I can ignore when I pull)
-* Send me a pull request. Bonus points for topic branches.
+The distinguishing feature of wucluster is that you don't _specify a process_ ("detach volumes"), you _demand a final state_ ("become separated"). This makes it robust against operations failing or different parts of the cluster being in different states; and it allows you to change the cluster's structure while live.
 
-== Copyright
+h2. Cluster definition and commands
 
-Copyright (c) 2009 Philip (flip) Kromer. See LICENSE for details.
+A cluster definition exists independently of any part of it running or not, so we refer to nodes (processor instances if running, AMIs if not) and mounts (EBS volumes if running, snapshots if not).  Each mount belongs to a specific node and understands its mount point.
+
+In practice, you'll usually just ask your cluster to do two things: become launched (@Cluster#launch!@) and become put away (@Cluster.put_away!@)
+
+h3. Cluster States
+
+Behing the scenes, wucluster will walk the nodes and mounts through the correct progression of states. The defined states of a cluster are, from birth to death:
+
+* *instantiated*: all nodes are running and all mounts exist.
+* *attached*: _instantiated_, and all mounts are attached to their nodes. 
+* *mounted*: _attached_, and all mounts are mounted within their node.
+* *launched*: cluster is a fully armed and operational battlestation. Right now, same as _mounted_ -- but it's possible other assertions could be added.
+* *unmounted*: no mount is mounted. Note that this doesn't mean anything is running or exists or whatever; just that _if_ a mount is attached that mount is _not_ mounted.
+* *separated*: _unmounted_, and no mount is attached.
+* *recently snapshotted*: _separated_; and every mount that exists has a snapshot that is "recent" (less than a certain amount old). We'll probably use local information to make this condition stronger in a later version.
+* *haltable*: _separated_; and all nodes can be shut down. Right now, this is a no-op, but you can hook in here.
+* *away*: no nodes are running and no mounts exist.
+
+A cluster doesn't have to be in one of those states: an operation might have failed, leaving some nodes attached and others detached. Or you could add three more nodes and mounts to a running cluster, in which case most of the nodes+mounts are launched while three are still away.
+
+h2. Design
+
+h3. Abstract state machine
+
+The distributed nature of cloud control operations demands a slightly different treatment of the state machine design pattern.  At low level we can't actually issue an imperative command ("instantiate this AMI, dammit"). We can only give the API a shove in the right direction ("try to run this AMI please") and then query whether the operation has completed ("is this instance running yet?").  In state machine terms, we can only _issue_ events and only _read_ states. (The existing ruby state machine libraries typically respond to events and treat states as a matter of internal state.)
+
+* event
+* precondition
+* state
+
+h3. AWS Facade
+
+Wucluster tries to be efficient in the general case with its API requests. It caches results where appropriate; and in general tries to use single requests returning info on all volumes/instances/snapshot rather than individual requests per volume/instance/snapshot.
+
+A volume's low-level state: 
+* existence:  (absent), creating, available, in-use, deleting, deleted, error (via AWS api)
+* attachment: attaching, attached, detaching, detached, error (via AWS api)
+* filesystem: mounted, unmounted, error (via SSH'ing to node)
+
+An instance can be:
+* pending, running, shutting-down, terminated, stopping, stopped (via AWS api)
+
+A snapshot can be:
+* 
+
+h3. principles
+
+Wucluster operations are
+* "idempotent":http://www.soapatterns.org/idempotent_capability.php -- doing something, then doing it again has no additional effect, useful in the face of uncertain latency.
+* operations can start from any state and proceed in parallel

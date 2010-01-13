@@ -92,19 +92,19 @@ module Wucluster
 
     def instantiated?
       self.status = :instantiated  if status == :instantiating && @transition_timer.finished?
-      [:instantiated, :detaching, :detached, :attaching, :attached].include?(status)
+      super
     end
     def attached?
       self.status = :attached      if status == :attaching     && @transition_timer.finished?
-      [:attached].include?(status)
+      super
     end
     def detached?
       self.status = :detached      if status == :detaching     && @transition_timer.finished?
-      [:deleted, :deleting, :detached].include?(status)
+      super
     end
     def deleted?
       self.status = :deleted       if status == :deleting      && @transition_timer.finished?
-      [:deleted].include?(status)
+      super
     end
   end
 

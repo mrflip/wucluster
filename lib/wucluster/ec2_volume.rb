@@ -6,57 +6,75 @@ module Wucluster
     :zone,
     :status,
     :created_at,
-    :attached_instance
+    :attached_instance,
+    :attachment_device,
+    :attachment_status,
+    :attached_at,
+    :deletes_on_termination
     )
   Ec2Volume.class_eval do
+
+    def to_s
+      "#{id}: #{[attached_instance, status].inspect}"
+    end
 
     #
     # Statuses
     #
 
-    def detached?
-      (  attached_instance.nil?) && (%w[available deleting].include? status)
+    def instantiating?
+      status == :instantiating
+    end
+    def instantiated?
+      status == :available
+    end
+    def deleting?
+      [:deleting].include?(status)
+    end
+    def attaching?
     end
     def attached?
-      (! attached_instance.nil?) && (status == "available")
+      instantiated? && (! attached_instance.blank?)
     end
-    def transitional?
-      %w[deleting ].include? status
+    def detached?
+      [:available, :deleting].include?(status) &&
+        attached_instance.blank?
     end
-
-    #
-    # Operations
-    #
-
-    # attaches volume to its instance
-    def attach options={}
-      return if attached?
-      Log.info "Detaching #{id}: #{[attached_instance, status].inspect}"
-      Wucluster.ec2.detach_volume options.merge(:volume_id => self.id)
-    end
-
-    # removes volume from its instance
-    def detach options={}
-      return if detached?
-      Log.info "Detaching #{id}: #{[attached_instance, status].inspect}"
-      Wucluster.ec2.detach_volume options.merge(:volume_id => self.id)
-    end
-
-    #
-    # Association
-    #
-
-    def mount
-      Mount.find(id)
-    end
-
-    def mount_handle
-      mount.handle
+    def detaching?
     end
 
     #
     # Facade for EC2 API
     #
+
+    def instantiate! options={}
+      return if instantiating?
+      Log.info "Instantiating #{self}"
+      Wucluster.ec2.create_volume options.reverse_merge(
+        :availability_zone => '',
+        :size => '',
+        :snapshot_id => ''
+        )
+    end
+    # attaches volume to its instance
+    def attach! options={}
+      return if attached?
+      Log.info "Attaching #{self}"
+      Wucluster.ec2.attach_volume options.reverse_merge(
+        :volume_id => self.id, :instance_id => '', :device => '')
+    end
+    # removes volume from its instance
+    def detach! options={}
+      return if detached?
+      Log.info "Detaching #{self}"
+      Wucluster.ec2.detach_volume options.reverse_merge(:force => false,
+        :volume_id => self.id, :instance_id => '', :device => '')
+    end
+    def delete! options={}
+      return if deleting?
+      Log.info "Deleting #{self}"
+      Wucluster.ec2.delete_volume options.reverse_merge(:volume_id => self.id)
+    end
 
     # list of all volumes
     def self.volumes
@@ -66,7 +84,6 @@ module Wucluster
     def self.volumes_map
       @volumes_map ||= self.load_volumes_map!
     end
-
     # Retrieve volume from volumes map, or by querying AWS directly
     def self.find volume_id
       volumes_map[volume_id.to_s] # || self.load_volume(volume_id)

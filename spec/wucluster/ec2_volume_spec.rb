@@ -1,24 +1,24 @@
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
 
-describe 'Wucluster::Mount' do
+describe 'Wucluster::Ec2Volume' do
   it 'creates' do
-    cluster = Wucluster::Mount.new()
+    volume = Wucluster::Ec2Volume.new()
   end
 
   # imperatives:  attach!, detach!, instantiate!, delete!
-  # volume: instantiated, instantiating, deleting, absent
+  # existence:    instantiated, instantiating, deleting, absent
   # relationship: attached, attaching, detaching, detached (or volume instantiating, deleting or absent)
 
   describe 'with state' do
     before do
-      @mount = Wucluster::MockVolume.new('vol_0')
-      @volume = mock 'mount_vol'
-      @mount.volume = @volume
+      @volume   = Wucluster::MockEc2Volume.new('vol_0')
+      @instance = mock 'mock_instance'
     end
-    it 'is not ready when its volume is instantiated and attaching, detaching or detached'
-    it 'is not ready when its volume is instantiating, deleting or absent'
-    #
-    it 'is     instantiated when its volume is instantiated and it is attaching or attached'
+    it 'is     instantiated when its status is available and attached or attaching' do
+      @volume.should_receive(:status).and_return(:instantiated)
+      @volume.should_receive(:attached?).and_return(true)
+      @volume.instantiated?.should be_true
+    end
     it 'is     instantiated when its volume is instantiated and it is detaching or detached'
     it 'is not instantiated when its volume is instantiating, deleting or absent'
     #
@@ -33,6 +33,9 @@ describe 'Wucluster::Mount' do
     it 'is painted dirty after any imperative (attach!, detach!, instantiate!, delete!)'
     it 'on any request for state,     refreshes    its volume if it is dirty'
     it 'on any request for state, does not refresh its volume if it is dirty'
+
+    it 'is attaching when'
+    it 'is attached when'
   end
 
   # imperatives:  attach!, detach!, instantiate!, delete!

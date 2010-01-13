@@ -38,8 +38,10 @@ module Wucluster
     end
 
     #
-    # Volume operations
+    # Operations
     #
+    def self.create!
+    end
 
     def delete!
       Log.info "Deleting #{description}. O, I die, Horatio."
