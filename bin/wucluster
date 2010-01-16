@@ -1,0 +1,14 @@
+#!/usr/bin/env ruby
+WUCLUSTER_DIR = File.expand_path(File.dirname(__FILE__))
+$: << WUCLUSTER_DIR+'/../lib'
+require 'rubygems'
+require 'wucluster'
+Settings.use :commandline #, :config_file
+
+p Settings
+Settings.poop 'wucluster.yaml'
+p Settings
+Settings.resolve!
+p Settings
+Settings.save! 'wucluster.yaml'
+p Settings
