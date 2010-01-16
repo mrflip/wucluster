@@ -8,7 +8,7 @@ h2. Cluster definition and commands
 
 A cluster definition exists independently of any part of it running or not, so we refer to nodes (processor instances if running, AMIs if not) and mounts (EBS volumes if running, snapshots if not).  Each mount belongs to a specific node and understands its mount point.
 
-In practice, you'll usually just ask your cluster to do two things: become launched (@Cluster#launch!@) and become put away (@Cluster.put_away!@)
+In practice, you'll usually just ask your cluster to do two things: become launched (@Cluster#launch!@) and become terminated (@Cluster.terminate!@)
 
 h3. Cluster States
 
@@ -22,9 +22,9 @@ Behing the scenes, wucluster will walk the nodes and mounts through the correct 
 * *separated*: _unmounted_, and no mount is attached.
 * *recently snapshotted*: _separated_; and every mount that exists has a snapshot that is "recent" (less than a certain amount old). We'll probably use local information to make this condition stronger in a later version.
 * *haltable*: _separated_; and all nodes can be shut down. Right now, this is a no-op, but you can hook in here.
-* *away*: no nodes are running and no mounts exist.
+* *terminated*: no nodes are running and no mounts exist.
 
-A cluster doesn't have to be in one of those states: an operation might have failed, leaving some nodes attached and others detached. Or you could add three more nodes and mounts to a running cluster, in which case most of the nodes+mounts are launched while three are still away.
+A cluster doesn't have to be in one of those states: an operation might have failed, leaving some nodes attached and others detached. Or you could add three more nodes and mounts to a running cluster, in which case most of the nodes+mounts are launched while three are still terminated.
 
 h2. Design
 

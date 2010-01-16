@@ -17,14 +17,13 @@ describe 'Wucluster::Cluster' do
     #
     # launch
     #
-    it 'to launch should instantiate its nodes and mounts, then attach mounts to nodes' do
-      @cluster.should_receive(:instantiate!)
-      @cluster.should_receive(:attach!)
+    it 'to launch must first become mounted' do
+      @cluster.should_receive(:mount!)
       @cluster.launch!
     end
     it 'is launched when all nodes are ready and all mounts are ready' do
-      @cluster.should_receive(:are_all).with(@nodes).and_return(true)
-      @cluster.should_receive(:are_all).with(@mounts).and_return(true)
+      @@nodes.should_receive(:all?).and_return(true)
+      @mounts.should_receive(:all?).and_return(true)
       @cluster.launched?.should be_true
     end
     it 'is not launched when any node is not ready' do

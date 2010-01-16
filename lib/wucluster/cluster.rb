@@ -3,15 +3,11 @@ module Wucluster
   # Cluster holds our idea of a hadoop cluster,
   # as embodied in the hadoop-ec2 config files
   #
-  Cluster = Struct.new(:name) unless defined?(Cluster)
-  Cluster.class_eval do
-    cattr_accessor :all
-    self.all = {}
-    def initialize _name, *args
-      super _name, *args
+  class Cluster
+    attr_accessor :name
+
+    def initialize _name
       self.name = _name.to_sym
-      # raise "duplicate cluster #{name}" if self.class.all[name]
-      self.class.all[name] = self
     end
 
     def to_s
@@ -20,34 +16,37 @@ module Wucluster
       ].map(&:to_s).join(" - ")
     end
 
-    # launch the cluster: all its nodes and mounts are created, available and attached
+    #
+    # launch the cluster. A launched cluster is a fully armed and operational
+    # battlestation. Right now, same as #mount! -- but it's possible other
+    # assertions could be added.
+    #
     def launch!
-      instantiate!
-      attach!
+      mount!
     end
-    # a cluster is launched when all its nodes and mounts are ready
-    # (instantiated and attached)
+    # A launched cluster is a fully armed and operational battlestation. Right
+    # now, same as #mount! -- but it's possible other assertions could be added.
     def launched?
-      are_all(nodes, &:ready?) && are_all(mounts, &:ready?)
+      mounted?
     end
 
-    # Put away this cluster:
+    # terminate this cluster:
     # * ensure all mounts are separated
     # * ensure all mounts are snapshotted
     # * put away all nodes and put away all mounts
-    def put_away!
+    def terminate!
       separate!
       snapshot!
       delete!
     end
     # a cluster is away if all its nodes and mounts are away (no longer running)
-    def away?
-      are_all(nodes, &:away?) && are_all(mounts, &:away?)
+    def terminated?
+      nodes.all?(&:terminated?) && mounts.all?(&:terminated?)
     end
 
     # instantiate the cluster by ensuring all nodes and all mounts are instantiated
     def instantiate!
-      attempt_waiting_until :instantiated? do
+      repeat_until :instantiated? do
         nodes.each(&:instantiate!)
         mounts.each(&:instantiate!)
         Log.info "Instantiating #{self}"
@@ -55,52 +54,80 @@ module Wucluster
     end
     # are all the nodes and mounts instantiated?
     def instantiated?
-      are_all(nodes, &:instantiated?) && are_all(mounts, &:instantiated?)
+      nodes.all?(&:instantiated?) && mounts.all?(&:instantiated?)
     end
 
     def attach!
-      attempt_waiting_until :attached? do
+      instantiate!
+      repeat_until :attached? do
         mounts.each(&:attach!)
         Log.info "Attaching #{self}"
       end
     end
     # are all mounts attached to their nodes?
     def attached?
-      are_all(mounts, &:attached?)
+      instantiated? && mounts.all?(&:attached?)
+    end
+
+    # mount the cluster: #attach! and then demand all mounts are mounted within
+    # their node.
+    def mount!
+      attach!
+      repeat_until :mounted? do
+        mounts.each(&:mount!)
+        Log.info "Mounting #{self}"
+      end
+    end
+    # are all mounts attached to their nodes?
+    def mounted?
+      attached? && mounts.all?(&:mounted?)
+    end
+
+    # mount the cluster: #attach! and then demand all mounts are mounted within
+    # their node.
+    def unmount!
+      repeat_until :unmounted? do
+        mounts.each(&:unmount!)
+        Log.info "Mounting #{self}"
+      end
+    end
+    # All mounts are unmounted on their nodes
+    def unmounted?
+      mounts.all?(&:unmounted?)
     end
 
     # Ask each mount to separate from its node
     def separate!
-      attempt_waiting_until :separated? do
+      unmount!
+      repeat_until :separated? do
         mounts.each(&:separate!)
         Log.info "Separating #{self}"
       end
     end
     # are all mounts separated from their nodes?
     def separated?
-      are_all(mounts, &:separated?)
+      unmounted? && mounts.all?(&:separated?)
     end
 
     # Ask each mount to create a snapshot of its volume, including metadata in
     # to make it recoverable
     def snapshot!
-      raise "out of order - tried to snapshot while not separated" if (! separated?)
-      attempt_waiting_until :recently_snapshotted? do
+      separate!
+      repeat_until :recently_snapshotted? do
         mounts.each(&:snapshot!)
         Log.info "Snapshotting #{self}"
-        Log.info MockSnapshot.snapshots.values.map(&:to_s).join(' - ')
       end
     end
     # have all mounts been recently snapshotted?
     def recently_snapshotted?
-      are_all(mounts, &:recently_snapshotted?)
+      mounts.all?(&:recently_snapshotted?)
     end
 
     # Ask each mount to delete its volume
     def delete!
       raise "Tried to delete while not separated"                  if (! separated?)
       raise "out of order - tried to delete while not snapshotted" if (! recently_snapshotted?)
-      attempt_waiting_until :deleted? do
+      repeat_until :deleted? do
         mounts.each(&:delete!)
         nodes.each(&:delete!)
         Log.info "Deleting #{self}"
@@ -108,64 +135,11 @@ module Wucluster
     end
     # have all mounts been deleted?
     def deleted?
-      are_all(mounts, &:deleted?) && are_all(nodes,  &:deleted?)
+      mounts.all?(&:deleted?) && nodes.all?( &:deleted?)
     end
 
-    #
-    # Bookkeeping of nodes and mounts
-    #
-
-    # Hash of mounts, indexed by [role, node_idx, node_vol_idx]
-    # Ex:
-    #    p cluster.mounts[['master', 0, 0]]
-    #    => #<struct Wucluster::Mount cluster="gibbon", role="master", node=<Wucluster::Node ...>, mount_idx=0, device="/dev/sdh", mount_point="/mnt/home", volume=#<Wucluster::Ec2Volume ...> >
-    def all_mounts
-      @all_mounts ||= load_mounts!
-    end
-    # flat list of mounts
-    def mounts
-      all_mounts.sort.map(&:last)
-    end
-
-    # Hash of nodes, indexed by [role, node_idx, node_vol_idx]
-    # Ex:
-    #    p cluster.nodes[['master', 0, 0]]
-    #    => #<struct Wucluster::Node cluster="gibbon", role="master", idx=0, node=...>
-    def all_nodes
-      @all_nodes ||= load_nodes!
-    end
-    # flat list of nodes
-    def nodes
-      all_nodes.map(&:last)
-    end
-
-    # flat list of snapshots from all mounts
-    def snapshots
-      snaps = []
-      mounts.each do |mount|
-        snaps += mount.snapshots
-      end
-      snaps
-    end
-
-    # Turn the cluster_role_node_mount_tree into a flat list of mounts,
-    # an hash indexed by [role,node_idx,node_vol_idx]
-    # interface to cluster definition from cloudera config files
-    def load_mounts!
-      @all_mounts = {}
-      cluster_role_node_mount_tree.each do |role, cluster_node_mounts|
-        cluster_node_mounts.each_with_index do |mounts, node_idx|
-          mounts.each_with_index do |mount, node_vol_idx|
-            @all_mounts[[role, node_idx, node_vol_idx]] =
-              Mount.new(name, role, node_idx, node_vol_idx, mount['device'], mount['mount_point'], mount['volume_id'])
-          end
-        end
-      end
-      @all_mounts
-    end
-
-  private
-    # attempt_waiting_until test, [sleep_time]
+  protected
+    # repeat_until test, [sleep_time]
     #
     # * runs block
     # * tests for completion by calling (on self) the no-arg method +test+
@@ -173,24 +147,12 @@ module Wucluster
     # * ... and then try again
     #
     # will only attempt MAX_TRIES times
-    def attempt_waiting_until test, &block
+    def repeat_until test, &block
       MAX_TRIES.times do
         yield
         break if self.send(test)
         sleep SLEEP_TIME
       end
-    end
-
-    # the boolean "and" of calling block on each mount -- returns false if any
-    # of the block calls returns false, true only if they are all true.
-    def are_all collection, &block
-      collection.each{|obj| return false if (! yield(obj)) }
-      return true
-    end
-
-    # The raw cluster_role_node_volume_tree from the cloudera EC2 cluster file
-    def cluster_role_node_mount_tree
-      @cluster_role_node_mounts ||= JSON.load(File.open(HADOOP_EC2_DIR+"/ec2-storage-#{name}.json"))
     end
   end
 end
