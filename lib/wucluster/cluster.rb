@@ -12,8 +12,12 @@ module Wucluster
 
     def to_s
       [ self.class, self.name,
-        # mounts.first.class, mounts.map(&:to_s).join(', ')
+        mounts.first.class, mounts.map(&:to_s).join(', ')
       ].map(&:to_s).join(" - ")
+    end
+
+    def mounts
+      []
     end
 
     #
@@ -129,13 +133,13 @@ module Wucluster
       raise "out of order - tried to delete while not snapshotted" if (! recently_snapshotted?)
       repeat_until :deleted? do
         mounts.each(&:delete!)
-        nodes.each(&:delete!)
+        nodes.each( &:delete!)
         Log.info "Deleting #{self}"
       end
     end
     # have all mounts been deleted?
     def deleted?
-      mounts.all?(&:deleted?) && nodes.all?( &:deleted?)
+      mounts.all?(&:deleted?) && nodes.all?(&:deleted?)
     end
 
   protected

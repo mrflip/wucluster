@@ -1,17 +1,22 @@
 module Wucluster
+  class Node
+    # belongs to cluster
+    attr_accessor :cluster
+    # string identifying logical role
+    attr_accessor :role
+    # together with the role, uniquely identifies node in cluster
+    attr_accessor :node_idx
+    # AWS id for the concrete instance if any
+    attr_accessor :instance_id
 
-  Node = Struct.new(
-    :cluster,
-    :role,
-    :node_idx,
-    :instance_id
-    )
-  Node.class_eval do
-    cattr_accessor :all
-    self.all = {}
-
+    def instantiate!
+    end
     def instantiated?
-      status == :running
+    end
+
+    def terminate!
+    end
+    def terminated?
     end
   end
 end
