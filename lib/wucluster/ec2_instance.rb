@@ -15,8 +15,8 @@ module Wucluster
 
     attr_accessor :private_ip
     attr_accessor :public_ip
+    # Instance launch time. The time the instance launched
     attr_accessor :launched_at
-
 
     def initialize id = nil
       self.id = id
@@ -45,20 +45,6 @@ module Wucluster
       terminate *args
     end
 
-    # #
-    # def start! options={}
-    #   Wucluster.ec2.start_instances     options.reverse_merge(:instance_id => [self.id])
-    # end
-    # #
-    # def stop! options={}
-    #   Wucluster.ec2.stop_instances      options.reverse_merge(:instance_id => [self.id], :force => false)
-    # end
-    # #
-    # def reboot! options={}
-    #   Wucluster.ec2.reboot_instances    options.reverse_merge(:instance_id => [self.id])
-    # end
-    # #
-
     def refresh!
       return unless self.id
       response_wrapper = Wucluster.ec2.describe_instances :instance_id => [self.id]
@@ -77,20 +63,6 @@ module Wucluster
     end
 
   private
-
-    # Output type identifier ("RESERVATION", "INSTANCE")
-    # Instance ID for each running instance
-    # AMI ID of the image on which the instance is based
-    # Public DNS name associated with the instance. This is only present for instances in the running state
-    # Private DNS name associated with the instance. This is only present for instances in the running state
-    # Instance state
-    # Key name. If a key was associated with the instance at launch, its name will appear
-    # AMI launch index
-    # Product codes attached to the instance
-    # Instance type. The type of the instance
-    # Instance launch time. The time the instance launched
-    # Availability Zone. The Availability Zone in which the instance is located
-    # Monitoring state
 
     API_ATTR_MAPPING = {
       "keyName"              => :key_name,
@@ -126,3 +98,23 @@ module Wucluster
     end
   end
 end
+
+    # Output type identifier ("RESERVATION", "INSTANCE")
+    # AMI ID of the image on which the instance is based
+    # AMI launch index
+    # Product codes attached to the instance
+    # Monitoring state
+
+    # #
+    # def start! options={}
+    #   Wucluster.ec2.start_instances     options.reverse_merge(:instance_id => [self.id])
+    # end
+    # #
+    # def stop! options={}
+    #   Wucluster.ec2.stop_instances      options.reverse_merge(:instance_id => [self.id], :force => false)
+    # end
+    # #
+    # def reboot! options={}
+    #   Wucluster.ec2.reboot_instances    options.reverse_merge(:instance_id => [self.id])
+    # end
+    # #
