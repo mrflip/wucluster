@@ -1,47 +1,37 @@
 module Wucluster
-  Ec2Volume = Struct.new(
-    :id,
-    :size,
-    :from_snapshot_id,
-    :zone,
-    :status,
-    :created_at,
-    :attached_instance,
-    :attachment_device,
-    :attachment_status,
-    :attached_at,
-    :deletes_on_termination
-    )
-  Ec2Volume.class_eval do
-
-    def to_s
-      "#{id}: #{[attached_instance, status].inspect}"
-    end
-
+  class Ec2Volume
+    # Unique ID of an EBS volume
+    attr_accessor :id
+    # Size in
+    attr_accessor :size
     #
-    # Statuses
+    attr_accessor :from_snapshot_id
     #
+    attr_accessor :zone
+    #
+    attr_accessor :status
+    #
+    attr_accessor :created_at
+    #
+    attr_accessor :attached_instance
+    #
+    attr_accessor :attachment_device
+    #
+    attr_accessor :attachment_status
+    #
+    attr_accessor :attached_at
+    #
+    attr_accessor :deletes_on_termination
 
-    def instantiating?
-      status == :instantiating
+
+    def initialize id = nil
+      self.id = id
+      self.refresh!
     end
-    def instantiated?
-      status == :available
-    end
-    def deleting?
-      [:deleting].include?(status)
-    end
-    def attaching?
-    end
-    def attached?
-      instantiated? && (! attached_instance.blank?)
-    end
-    def detached?
-      [:available, :deleting].include?(status) &&
-        attached_instance.blank?
-    end
-    def detaching?
-    end
+
+    # def to_s
+    #   "#{id}: #{[attached_instance, status].inspect}"
+    # end
 
     #
     # Facade for EC2 API
@@ -76,6 +66,31 @@ module Wucluster
       Wucluster.ec2.delete_volume options.reverse_merge(:volume_id => self.id)
     end
 
+    # #
+    # # Statuses
+    # #
+    #
+    # def instantiating?
+    #   status == :instantiating
+    # end
+    # def instantiated?
+    #   status == :available
+    # end
+    # def deleting?
+    #   [:deleting].include?(status)
+    # end
+    # def attaching?
+    # end
+    # def attached?
+    #   instantiated? && (! attached_instance.blank?)
+    # end
+    # def detached?
+    #   [:available, :deleting].include?(status) &&
+    #     attached_instance.blank?
+    # end
+    # def detaching?
+    # end
+
     # list of all volumes
     def self.volumes
       volumes_map.values
@@ -86,12 +101,14 @@ module Wucluster
     end
     # Retrieve volume from volumes map, or by querying AWS directly
     def self.find volume_id
-      volumes_map[volume_id.to_s] # || self.load_volume(volume_id)
+      volumes_map[volume_id.to_s]
     end
 
     # refreshes info from AWS, flushing any current status
     def refresh!
-      merge! self.class.load_volume(self.id)
+      response = Wucluster.ec2.describe_volumes(:volume_id => volume_id, :owner_id => Wucluster.aws_account_id)
+      volume_info = response.volumeSet.item.first rescue nil
+      merge_api_response! volume_info
     end
 
   protected
@@ -100,8 +117,9 @@ module Wucluster
     def self.load_volumes_map!
       Log.info "Loading volume list"
       @volumes_map = {}
-      Wucluster.ec2.describe_volumes(:owner_id => Wucluster.aws_account_id).volumeSet.item.each do |volume_hsh|
-        @volumes_map[volume_hsh['volumeId']] = self.from_hsh(volume_hsh)
+      response = Wucluster.ec2.describe_volumes(:owner_id => Wucluster.aws_account_id)
+      response.volumeSet.item.each do |volume_info|
+        self.new_from_api_response(volume_info)
       end
       Log.info "Loaded list of #{@volumes_map.length} volumes"
       @volumes_map
@@ -111,14 +129,38 @@ module Wucluster
     #      {"attachmentSet"=>nil, "createTime"=>"2009-11-02T14:31:53.000Z", "size"=>"100",
     #       "volumeId"=>"vol-bfd826d6", "snapshotId"=>"snap-0429a56d", "status"=>"available", "availabilityZone"=>"us-east-1d"},
     def self.load_volume volume_id
-      volume_hsh = Wucluster.ec2.describe_volumes(:volume_id => volume_id, :owner_id => Wucluster.aws_account_id).volumeSet.item.first rescue nil
-      self.from_hsh volume_hsh
+      response = Wucluster.ec2.describe_volumes(:volume_id => volume_id, :owner_id => Wucluster.aws_account_id)
+      volume_info = response.volumeSet.item.first rescue nil
+      self.new_from_api_response(volume_info)
     end
 
+    def self.add_volume ec2_volume
+      @volumes_map[ec2_volume.id] = ec2_volume
+    end
+
+    def self.new_from_api_response volume_info
+      ec2_volume = self.new()
+      ec2_volume.merge_api_response!(volume_info)
+      add_volume ec2_volume
+      ec2_volume
+    end
+
+    API_ATTR_MAPPING = {
+      'volumeId'         => :id,
+      'size'             => :size,
+      'snapshotId'       => :snapshot_id,
+      'availabilityZone' => :availability_zone,
+      'status'           => :status,
+      'createTime'       => :created_at,
+      'attachmentSet'    => :attachment_set,
+    }
+
     # construct instance using hash as sent back from AWS
-    def self.from_hsh(volume_hsh)
-      return nil if volume_hsh.blank?
-      self.new(* volume_hsh.values_of('volumeId', 'size', 'snapshotId', 'availabilityZone', 'status', 'createTime', 'attachmentSet'))
+    def merge_api_response!(volume_info)
+      volume_info.each do |api_attr, val|
+        attr = API_ATTR_MAPPING[api_attr] or next
+        self.send("#{attr}=", val)
+      end
     end
 
   end

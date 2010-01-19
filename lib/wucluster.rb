@@ -15,9 +15,9 @@ module Wucluster
   autoload :Cluster,     'wucluster/cluster'
   autoload :Mount,       'wucluster/mount'
   autoload :Node,        'wucluster/node'
-  # autoload :Ec2Volume,   'wucluster/ec2_volume'
-  # autoload :Ec2Instance, 'wucluster/ec2_instance'
-  # autoload :Ec2Snapshot, 'wucluster/ec2_snapshot'
+  autoload :Ec2Volume,   'wucluster/ec2_volume'
+  autoload :Ec2Instance, 'wucluster/ec2_instance'
+  autoload :Ec2Snapshot, 'wucluster/ec2_snapshot'
   # require 'wucluster/mock_cluster_mount'
 
   #

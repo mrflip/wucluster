@@ -8,4 +8,5 @@ Settings.use :commandline, :config_file
 Settings.read 'wucluster.yaml'
 Settings.resolve!
 
-command, cluster, *argvs = Settings.rest
+command = Settings.rest.pop
+cluster = Settings.rest.pop
