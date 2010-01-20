@@ -11,7 +11,7 @@ module Wucluster
   Mount.class_eval do
     cattr_accessor :all
     self.all = {}
-    delegate(:state, 
+    delegate(:state,
       :attach!,    :detach!,    :delete!,
       :attached?,  :detached?,
       :attaching?, :detaching?, :instantiating?, :deleting?
@@ -24,7 +24,7 @@ module Wucluster
       # self.coerce_to_int!(:node_vol_idx, true)
       self.class.all[volume_id] = self
     end
-    
+
     def to_s
       '#<' + [
         self.class.to_s,
@@ -36,25 +36,37 @@ module Wucluster
     # Imperatives
     #
     def instantiate!
+      # if we have a volume,
       self.volume ||= Ec2Volume.new
       volume.instantiate!
+    end
+    def attach!
+      volume.attach(node.instance)
+    end
+    def mount!
+      node.mount(volume, mount_point)
+    end
+    def unmount!
+      node.unmount(mount_point)
     end
     def separate!
       return if (!volume) || (volume.detached?)
       volume.detach!
     end
-    
-    def ready?
-      instantiated? && attached?
-    end
-    def separated?
-      ((! instantiated?) && (! instantiating?)) ||
-      (instantiated? && detached?) 
-    end
 
     def instantiated?
-      volume && volume.instantiated?
     end
+    def attached?
+    end
+    def mounted?
+    end
+    def separated?
+    end
+    def recently_snapshotted?
+    end
+    def terminated?
+    end
+
     # def attached?() refresh_if_dirty! ; volume.attached? ;           end
     # def detached?() refresh_if_dirty! ; volume.detached? ;           end
     # def attaching?() refresh_if_dirty! ; volume.attaching? ;         end
@@ -72,7 +84,7 @@ module Wucluster
     #
     # Snapshot
     #
-    
+
     def snapshot!
       MockSnapshot.create(volume)
     end
@@ -98,18 +110,18 @@ module Wucluster
     # def self.from_handle handle
     #   self.new *handle.split("+", self.keys.length)
     # end
-    # 
+    #
     # def self.find volume_id
     #   all[volume_id]
     # end
-    # 
+    #
     # #
     # # Delegate stuff to the contained volume
     # #
     # def volume
     #   Ec2Volume.find(volume_id)
     # end
-    # 
+    #
     # def detach!()
     #   volume.detach! if volume
     # end
@@ -137,25 +149,25 @@ module Wucluster
     #   end
     #   volume.create_snapshot
     # end
-    # 
+    #
     # #
     # # Snapshot
     # #
-    # 
+    #
     # # Create a snapshot of the volume, including metadata in
     # # the description to make it recoverable
     # def create_snapshot options={}
     #   Log.info "Creating snapshot for #{id} as #{mount_handle}"
     #   Wucluster.ec2.create_snapshot options.merge(:volume_id => self.id, :description => mount_handle   )
     # end
-    # 
+    #
     # def newest_snapshot
     #   snapshots.sort_by(&:created_at).find_all(&:completed?).last
     # end
     # def has_recent_snapshot?
     #   newest_snapshot && newest_snapshot.recent?
     # end
-    # 
+    #
     # # List Associated Snapshots
     # def snapshots
     #   Wucluster::Ec2Snapshot.for_volume id
