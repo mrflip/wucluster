@@ -51,6 +51,55 @@ An instance can be:
 A snapshot can be:
 * 
 
+
+h2. Workflow
+
+instantiate:
+* instantiate mount:
+** return if volume exists and is instantiated or is creating.
+** if volume has error, raise.
+** if volume is deleting or deleted, decouple from it (no volume). Then,
+** if mount has no volume, instantiate from snapshot (mount's if any, otherwise the cluster's generic snapshot)
+* instantiate node:
+** return if instance exists and is instantiated
+** if instance has error, raise
+** if instance is shutting-down, terminated, stopping, or stopped, decouple from it (no instance). Then,
+** if no node, instantiate from its image (node's if any, otherwise the cluster's generic image)
+
+attach:
+* attach mount:
+-- preconditions: node is instantiated and mount is instantiated
+** if not instantiated, call instantiate! and return
+** return if attaching or attached correctly
+** raise if not correctly attached
+** available,
+
+mount:
+** attach! and return if not attached
+** raise if mounted wrong
+** return if mounted
+** issue command to mount,
+
+unmount:
+** return if not attached
+** issue unmount command
+
+separate:
+* return unless instance is running and volume is in-use
+*
+
+snapshot:
+
+terminate:
+* return unless
+* separaate
+
+
+
+detach
+
+
+ 
 h3. principles
 
 Wucluster operations are
