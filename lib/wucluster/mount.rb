@@ -7,14 +7,25 @@ module Wucluster
     attr_accessor :device
     attr_accessor :mount_point
     attr_accessor :volume_id
+    attr_accessor :size
 
-    def initialize cluster, role, node_idx, node_vol_idx, device, mount_point
-      self.cluster = cluster
-      self.role = role
-      self.node_idx = node_idx
-      self.node_vol_idx = node_vol_idx
-      self.device = device
-      self.mount_point = mount_point
+    def initialize cluster, role, node_idx, node_vol_idx, device, mount_point, size, volume_id
+      self.cluster       = cluster
+      self.role          = role
+      self.node_idx      = node_idx
+      self.node_vol_idx  = node_vol_idx
+      self.device        = device
+      self.mount_point   = mount_point
+      self.size          = size
+      self.volume_id     = volume_id
+    end
+
+    def id
+      [cluster, role, "%03d"%node_idx, "%03d"%node_vol_idx].join("+")
+    end
+
+    def description
+      [cluster, role, "%03d"%node_idx, "%03d"%node_vol_idx, device, mount_point, volume_id, size].join("+")
     end
 
     #

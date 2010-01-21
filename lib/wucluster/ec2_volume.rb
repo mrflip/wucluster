@@ -47,7 +47,7 @@ module Wucluster
       Wucluster.ec2.create_volume options.reverse_merge(
         :availability_zone => self.availability_zone,
         :size              => self.size,
-        :snapshot_id       => self.from_snapshot_id,
+        :snapshot_id       => self.from_snapshot_id
         )
     end
     # attaches volume to its instance
