@@ -1,35 +1,20 @@
 module Wucluster
-  Mount = Struct.new(
-    :cluster,
-    :role,
-    :node_idx,
-    :node_vol_idx,
-    :device,
-    :mount_point,
-    :volume_id
-    ) unless defined?(Mount)
-  Mount.class_eval do
-    cattr_accessor :all
-    self.all = {}
-    delegate(:state,
-      :attach!,    :detach!,    :delete!,
-      :attached?,  :detached?,
-      :attaching?, :detaching?, :instantiating?, :deleting?
-      :size,  :region, :state, :created_at,
-      :to => :volume)
+  class Mount
+    attr_accessor :cluster
+    attr_accessor :role
+    attr_accessor :node_idx
+    attr_accessor :node_vol_idx
+    attr_accessor :device
+    attr_accessor :mount_point
+    attr_accessor :volume_id
 
-    def initialize *args
-      super *args
-      # self.coerce_to_int!(:node_idx,   true)
-      # self.coerce_to_int!(:node_vol_idx, true)
-      self.class.all[volume_id] = self
-    end
-
-    def to_s
-      '#<' + [
-        self.class.to_s,
-        volume ? 'no volume' : volume.to_s,
-      ].join(' ') + '>'
+    def initialize cluster, role, node_idx, node_vol_idx, device, mount_point
+      self.cluster = cluster
+      self.role = role
+      self.node_idx = node_idx
+      self.node_vol_idx = node_vol_idx
+      self.device = device
+      self.mount_point = mount_point
     end
 
     #

@@ -3,25 +3,25 @@ module Wucluster
   class Ec2Volume
     # Unique ID of an EBS volume
     attr_accessor :id
-    # Size in
+    # The size of the volume, in GiBs.
     attr_accessor :size
-    #
+    # Snapshot from which the volume was created (optional).
     attr_accessor :from_snapshot_id
-    #
-    attr_accessor :zone
-    #
+    # Availability Zone in which the volume was created.
+    attr_accessor :availability_zone
+    # Volume state: creating, available, in-use, deleting, deleted, error
     attr_accessor :status
-    #
+    # Time stamp when volume creation was initiated.
     attr_accessor :created_at
-    #
-    attr_accessor :attached_instance
-    #
+    # AWS ID of the attached instance, if any
+    attr_accessor :attached_instance_id
+    # Specifies how the device is exposed to the instance (e.g., /dev/sdh).
     attr_accessor :attachment_device
-    #
+    # Attachment status: attaching, attached, detaching, detached, error
     attr_accessor :attachment_status
-    #
+    # Time stamp when the attachment initiated.
     attr_accessor :attached_at
-    #
+    # Specifies whether the Amazon EBS volume is deleted on instance termination.
     attr_accessor :deletes_on_termination
 
     def initialize id = nil
@@ -29,9 +29,13 @@ module Wucluster
       self.refresh!
     end
 
-    # def to_s
-    #   "#{id}: #{[attached_instance, status].inspect}"
-    # end
+    # Ec2Snapshot this volume was created from
+    attr_reader :from_snapshot
+    # :nodoc:
+    def from_snapshot_id= snapshot_id
+      @from_snapshot_id = snapshot_id
+      @from_snapshot    = ::Wucluster::Ec2Snapshot.find(snapshot_id)
+    end
 
     #
     # Facade for EC2 API
@@ -41,9 +45,9 @@ module Wucluster
       return if instantiating?
       Log.info "Instantiating #{self}"
       Wucluster.ec2.create_volume options.reverse_merge(
-        :availability_zone => '',
-        :size => '',
-        :snapshot_id => ''
+        :availability_zone => self.availability_zone,
+        :size              => self.size,
+        :snapshot_id       => self.from_snapshot_id,
         )
     end
     # attaches volume to its instance

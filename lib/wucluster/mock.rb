@@ -1,4 +1,6 @@
 module Wucluster
+    # Effective -infinity
+    LONG_TIME_AGO       = 10*365*24*60*60
   #
   # Simulates an event that takes a random amount of time
   #
