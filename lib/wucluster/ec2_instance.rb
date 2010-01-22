@@ -24,10 +24,6 @@ module Wucluster
     #
     attr_accessor :image_id
 
-    #
-    def initialize hsh
-      update! hsh
-    end
     # retrieve info for all volumes from AWS
     def self.each_api_item &block
       response = Wucluster.ec2.describe_instances

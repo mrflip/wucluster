@@ -26,11 +26,6 @@ module Wucluster
     # Specifies whether the Amazon EBS volume is deleted on instance termination.
     attr_accessor :deletes_on_termination
 
-    #
-    def initialize hsh
-      update! hsh
-    end
-
     # Snapshot this volume was created from.
     def from_snapshot
       Wucluster::Ec2Snapshot.find(snapshot_id)

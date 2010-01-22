@@ -1,9 +1,9 @@
 module Wucluster
-
   #
   # Facade for an EBS Snapshot
   #
   class Ec2Snapshot
+    include Ec2Proxy
     # Time window for figuring if a snapshot is recent
     RECENT_SNAPSHOT_AGE = 2*60*60
 
@@ -24,25 +24,9 @@ module Wucluster
     # Description of the owning volume
     attr_accessor :volume_handle
 
-    # Create a new Ec2Snapshot
     #
-    # @param id              The ID of the snapshot.
-    # @param volume_id       The ID of the volume.
-    # @param status          Snapshot state (e.g., pending, completed, or error)
-    # @param created_at      Time stamp when the snapshot was initiated.
-    # @param progress        The progress of the snapshot, in percentage.
-    # @param owner_id        The AWS account ID of the Amazon EBS snapshot owner.
-    # @param size            [Integer] The size of the volume, in GiB.
-    # @param volume_handle   [String] Description of the snapshot.
-    def initialize id, volume_id, status, created_at, progress, owner_id, size, volume_handle
-      self.id            = id
-      self.volume_id     = volume_id
-      self.status        = status.to_sym
-      self.created_at    = Time.parse(created_at)
-      self.progress      = progress
-      self.owner_id      = owner_id
-      self.size          = size.to_i
-      self.volume_handle = volume_handle
+    def initialize hsh
+      update! hsh
     end
 
     # ===========================================================================
@@ -65,8 +49,8 @@ module Wucluster
     def self.create! volume_id, description
       Log.info "Creating #{description}."
       response = Wucluster.ec2.create_snapshot(:volume_id => volume_id, :description => description)
-      snapshot_hsh = response.snapshotSet.item.first rescue nil
-      from_ec2_hsh(snapshot_hsh)
+      self.update! self.class.api_hsh_to_params(response)
+      dirty!
     end
 
     # Delete the snapshot on the AWS side
@@ -94,6 +78,47 @@ module Wucluster
     # Has the snapshot process completed?
     def completed?
       (status == :completed) && (progress == "100%")
+    end
+
+
+    # Hash of all ec2_snapshots by their ID
+    def self.snapshots_map
+      @snapshots_map or self.load_snapshots!
+    end
+
+    # List of all snapshots
+    def self.snapshots
+      snapshots_map.values
+    end
+
+    # Retrieve snapshot from list of all snapshots, or by querying AWS directly
+    def self.find snapshot_id
+      snapshots_map[snapshot_id]
+    end
+
+  protected
+
+    def self.each_api_item &block
+      response = Wucluster.ec2.describe_snapshots
+      response.snapshotSet.item.each(&block)
+    end
+
+    # Use the hash sent back from AWS to construct an Ec2Snapshot instance
+    #      {"snapshotId"=>"snap-e2f5948b", "volumeId"=>"vol-5f6a8536", "status"=>"completed",
+    #      "startTime"=>"2009-12-10T19:45:11.000Z", "progress"=>"100%",
+    #      "ownerId"=>"145626931636", "volumeSize"=>"20", "description"=>"12/10/09 backup"}
+    def self.api_hsh_to_params api_hsh
+      hsh = {
+        :id            => api_hsh['snapshotId'],
+        :volume_id     => api_hsh['volumeId'],
+        :status        => api_hsh[ 'status'],
+        :progress      => api_hsh['progress'],
+        :owner_id      => api_hsh['ownerId'],
+        :size          => api_hsh['volumeSize'].to_i,
+        :volume_handle => api_hsh['description'],
+      }
+      hsh[:created_at] = api_hsh[ 'startTime']
+      hsh
     end
 
   end

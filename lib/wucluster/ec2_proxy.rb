@@ -5,6 +5,11 @@ module Wucluster
   module Ec2Proxy
 
     #
+    def initialize hsh
+      update! hsh
+    end
+
+    #
     def update! hsh
       hsh.each do |attr, val|
         self.send("#{attr}=", val)
