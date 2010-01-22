@@ -1,6 +1,8 @@
 require 'wucluster/ec2_instance/api'
 module Wucluster
   class Ec2Instance
+    include Ec2Proxy
+
     # Unique ID of a machine image.
     attr_accessor :id
     # instance status: pending, running, shutting-down, terminated, stopping, stopped
@@ -18,11 +20,44 @@ module Wucluster
     # IP address of the external interface
     attr_accessor :public_ip
     # Instance launch time. The time the instance launched
-    attr_accessor :launched_at
+    attr_accessor :created_at
+    #
+    attr_accessor :image_id
 
-    def initialize id = nil
-      self.id = id
-      self.refresh!
+    #
+    def initialize hsh
+      update! hsh
+    end
+    # retrieve info for all volumes from AWS
+    def self.each_api_item &block
+      response = Wucluster.ec2.describe_instances
+      p [response, response.reservationSet.item]
+      response.reservationSet.item.each(&block)
+    end
+
+    def to_hash
+      %w[id status key_name security_groups availability_zone instance_type public_ip private_ip created_at image_id
+        ].inject({}){|hsh, attr| hsh[attr.to_sym] = self.send(attr); hsh}
+    end
+
+    # construct instance using hash as sent back from AWS
+    def self.api_hsh_to_params(api_hsh)
+      instance_info = api_hsh.instancesSet.item.first
+      group_info    = api_hsh.groupSet.item
+      hsh = {
+        :id              => instance_info["instanceId"],
+        :key_name        => instance_info["keyName"],
+        :instance_type   => instance_info["instanceType"],
+        :public_ip       => instance_info["ipAddress"],
+        :private_ip      => instance_info["privateIpAddress"],
+        :security_groups => group_info.map{|gh| gh['groupId']},
+        :image_id        => instance_info["imageId"],
+        # "kernelId" => "aki-a71cf9ce", "amiLaunchIndex"=>"0", "reason"=>nil, "rootDeviceType"=>"instance-store", "blockDeviceMapping" =>nil, "ramdiskId"=>"ari-a51cf9cc", "productCodes"       =>nil,
+      }
+      hsh[:created_at]        = Time.parse(instance_info["launchTime"])        rescue nil
+      hsh[:availability_zone] = instance_info["placement"]['availabilityZone'] rescue nil
+      hsh[:status]            = instance_info["instanceState"]['name']         rescue nil
+      hsh
     end
 
     # Launches a specified number of instances of an AMI for which you have permissions.
@@ -43,28 +78,37 @@ module Wucluster
     # @option options [optional, Boolean] :disable_api_termination (true) Specifies whether the instance can be terminated using the APIs. You must modify this attribute before you can terminate any "locked" instances from the APIs.
     # @option options [optional, String] :instance_initiated_shutdown_behavior ('stop') Specifies whether the instance's Amazon EBS volumes are stopped or terminated when the instance is shut down. Valid values : 'stop', 'terminate'
     #
-    def run! image_id, options={}
-      resp = Wucluster.ec2.run_instances options.merge(:image_id => image_id,
+    def run! options={}
+      response = Wucluster.ec2.run_instances options.merge(:image_id => image_id,
         :key_name => key_name, :security_groups => security_groups, :availability_zone => availability_zone,
         :instance_type => instance_type)
+      p response
+      update! self.class.api_hsh_to_params(response)
+      undirty!
     end
 
     # The TerminateInstances operation shuts down one or more instances.
     def terminate! options={}
-      resp = Wucluster.ec2.terminate_instances options.merge(:instance_id => [self.id])
-    end
-
-    # alias for #run!
-    def instantiate! *args
-      run! *args
-    end
-    # alias for #terminate!
-    def delete! *args
-      terminate *args
+      response = Wucluster.ec2.terminate_instances options.merge(:instance_id => [self.id])
+      new_state = response.instancesSet.item.first.currentState.name rescue nil
+      Log.warn "Request returned funky status: #{new_state}" unless (['shutting-down', 'terminated'].include? new_state)
+      dirty!
+      response
     end
 
   end
 end
+
+
+    # def merge_api_response! response
+    #   instance_info = response.instancesSet.item.first
+    #   instance_info.each do |api_attr, val|
+    #     attr = API_ATTR_MAPPING[api_attr] or next
+    #     self.send("#{attr}=", val)
+    #   end
+    #   group_info = response.groupSet.item
+    #   self.security_groups = group_info.map{|gh| gh['groupId']}
+    # end
 
     # Output type identifier ("RESERVATION", "INSTANCE")
     # AMI ID of the image on which the instance is based

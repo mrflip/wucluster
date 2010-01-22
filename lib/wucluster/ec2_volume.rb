@@ -1,6 +1,8 @@
 require 'wucluster/ec2_volume/api'
 module Wucluster
   class Ec2Volume
+    include Ec2Proxy
+
     # Unique ID of an EBS volume
     attr_accessor :id
     # The size of the volume, in GiBs.
@@ -24,76 +26,92 @@ module Wucluster
     # Specifies whether the Amazon EBS volume is deleted on instance termination.
     attr_accessor :deletes_on_termination
 
-    def initialize id = nil
-      self.id = id
-      self.refresh!
+    #
+    def initialize hsh
+      update! hsh
     end
 
-    # Ec2Snapshot this volume was created from
-    attr_reader :from_snapshot
-    # :nodoc:
-    def from_snapshot_id= snapshot_id
-      @from_snapshot_id = snapshot_id
-      @from_snapshot    = ::Wucluster::Ec2Snapshot.find(snapshot_id)
+    # Snapshot this volume was created from.
+    def from_snapshot
+      Wucluster::Ec2Snapshot.find(snapshot_id)
     end
 
     #
     # Facade for EC2 API
     #
 
+    # start creating volume
     def instantiate! options={}
-      return if instantiating?
+      # return if instantiating?
       Log.info "Instantiating #{self}"
-      Wucluster.ec2.create_volume options.reverse_merge(
+      response = Wucluster.ec2.create_volume options.merge(
         :availability_zone => self.availability_zone,
         :size              => self.size,
         :snapshot_id       => self.from_snapshot_id
         )
+      self.update! self.class.api_hsh_to_params(response)
+      dirty!
     end
-    # attaches volume to its instance
-    def attach! options={}
-      return if attached?
+
+    # start attaching volume to its instance
+    def attach! instance, attachment_device, options={}
       Log.info "Attaching #{self}"
-      Wucluster.ec2.attach_volume options.reverse_merge(
-        :volume_id => self.id, :instance_id => '', :device => '')
+      response = Wucluster.ec2.attach_volume options.merge( :volume_id => self.id, :instance_id => instance.id, :device => attachment_device)
+      self.update! self.class.attachment_hsh_to_params(response)
+      dirty!
     end
-    # removes volume from its instance
+    # start removing volume from its instance
     def detach! options={}
-      return if detached?
       Log.info "Detaching #{self}"
-      Wucluster.ec2.detach_volume options.reverse_merge(:force => false,
-        :volume_id => self.id, :instance_id => '', :device => '')
+      response = Wucluster.ec2.detach_volume options.merge(:volume_id => self.id, :instance_id => self.attached_instance_id, :device => attachment_device)
+      self.update! self.class.attachment_hsh_to_params(response)
+      dirty!
     end
+    # start deleting volume
     def delete! options={}
-      return if deleting?
+      return if status == 'deleting'
       Log.info "Deleting #{self}"
-      Wucluster.ec2.delete_volume options.reverse_merge(:volume_id => self.id)
+      response = Wucluster.ec2.delete_volume options.merge(:volume_id => self.id)
+      Log.warn "Request returned funky status: #{response["return"]}" unless (response["return"] == "true")
+      self.update! self.class.api_hsh_to_params(response)
+      dirty!
     end
 
-    # #
-    # # Statuses
-    # #
-    #
-    # def instantiating?
-    #   status == :instantiating
-    # end
-    # def instantiated?
-    #   status == :available
-    # end
-    # def deleting?
-    #   [:deleting].include?(status)
-    # end
-    # def attaching?
-    # end
-    # def attached?
-    #   instantiated? && (! attached_instance.blank?)
-    # end
-    # def detached?
-    #   [:available, :deleting].include?(status) &&
-    #     attached_instance.blank?
-    # end
-    # def detaching?
-    # end
+  protected
+    # retrieve info for all volumes from AWS
+    def self.each_api_item &block
+      response = Wucluster.ec2.describe_volumes(:owner_id => Settings.aws_account_id)
+      response.volumeSet.item.each(&block)
+    end
 
+    # construct instance using hash as sent back from AWS
+    def self.api_hsh_to_params(api_hsh)
+      hsh = {
+        :id                  => api_hsh['volumeId'],
+        :from_snapshot_id    => api_hsh['snapshotId'],
+        :availability_zone   => api_hsh['availabilityZone'],
+        :status              => api_hsh['status'].gsub(/-/,"_").to_sym,
+        :attachment_set      => api_hsh['attachmentSet'] }
+      hsh[:size]             = api_hsh['size'].to_i if api_hsh['size']
+      hsh[:created_at]       = Time.parse(api_hsh['createTime']) if api_hsh['createTime']
+      attachment_hsh = api_hsh['attachmentSet']['item'].first rescue nil
+      hsh.merge!( attachment_hsh_to_params(attachment_hsh) )
+      hsh
+    end
+
+    def self.attachment_hsh_to_params attachment_hsh
+      return {} unless attachment_hsh
+      {
+        :attached_at             => Time.parse(attachment_hsh['attachTime']),
+        :attachment_device       => attachment_hsh['device'],
+        :deletes_on_termination  => attachment_hsh['deleteOnTermination'],
+        :attached_instance_id    => attachment_hsh['instanceId'],
+        :attachment_status       => attachment_hsh['status'].to_sym,
+      }
+    end
+
+    def update_from_response! response
+      update! self.class.api_hsh_to_params(response.volumeSet.item.first)
+    end
   end
 end

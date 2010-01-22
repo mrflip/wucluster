@@ -17,6 +17,7 @@ module Wucluster
   autoload :Cluster,     'wucluster/cluster'
   autoload :Mount,       'wucluster/mount'
   autoload :Node,        'wucluster/node'
+  autoload :Ec2Proxy,    'wucluster/ec2_proxy'
   autoload :Ec2Volume,   'wucluster/ec2_volume'
   autoload :Ec2Instance, 'wucluster/ec2_instance'
   autoload :Ec2Snapshot, 'wucluster/ec2_snapshot'
