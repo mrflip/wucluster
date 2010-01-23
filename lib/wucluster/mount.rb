@@ -4,12 +4,13 @@ module Wucluster
     attr_accessor :role
     attr_accessor :node_idx
     attr_accessor :node_vol_idx
+    attr_accessor :from_snapshot_id
     attr_accessor :device
     attr_accessor :mount_point
-    attr_accessor :volume_id
     attr_accessor :size
+    attr_accessor :volume_id
 
-    def initialize cluster, role, node_idx, node_vol_idx, device, mount_point, size, volume_id
+    def initialize cluster, role, node_idx, node_vol_idx, device, mount_point, size, volume_id=nil
       self.cluster       = cluster
       self.role          = role
       self.node_idx      = node_idx
@@ -20,26 +21,57 @@ module Wucluster
       self.volume_id     = volume_id
     end
 
+    def to_s
+      %Q{#<#{self.class} #{cluster.name}-#{role}-#{"%03d"%node_idx}-#{"%03d"%node_vol_idx} #{volume_id} #{size}GB #{device}~#{mount_point} #{status}>}
+    end
+    def inspect
+      to_s
+    end
+
     def id
       [cluster, role, "%03d"%node_idx, "%03d"%node_vol_idx].join("+")
     end
 
-    def description
+    def handle
       [cluster, role, "%03d"%node_idx, "%03d"%node_vol_idx, device, mount_point, volume_id, size].join("+")
+    end
+
+    def availability_zone
+      cluster.availability_zone
+    end
+
+    def volume
+      Ec2Volume.find(volume_id)
+    end
+
+    def status
+      volume ? volume.status : "(absent)"
+    end
+    def refresh!
+      volume && volume.refresh!
+      self
+    end
+
+    def node
+      cluster.find_node role, node_idx
+    end
+
+    def volume=(ec2_volume)
+      @volume_id = ec2_volume ? ec2_volume.id : nil
     end
 
     #
     # Imperatives
     #
     def create!
-      volume = new_blank_volume if volume.nil? || volume.deleted?
-      case volume.status
-      when :created   then true
-      when :uncreated then volume.create!
-      when :deleting  then :wait
-      when :creating  then :wait
-      when :error     then :error
-      else raise UnexpectedState, volume.status
+      self.volume = new_blank_volume if volume.nil? || volume.deleted?
+      case
+      when volume.created?   then true
+      when volume.deleted?   then volume.create! ; :wait
+      when volume.deleting?  then :wait
+      when volume.creating?  then :wait
+      when volume.error?     then :error
+      else raise UnexpectedState, volume.status.to_s
       end
     end
     def created?
@@ -47,14 +79,17 @@ module Wucluster
     end
 
     def attach!
-      return create! unless created?
+      unless created? && node.running?
+        create!
+        node.run!
+      end
       case volume.status
       when :attached   then true
-      when :detached   then volume.attach!
+      when :detached   then volume.attach!(node.instance, device) ; :wait
       when :attaching  then :wait
       when :detaching  then :wait
       when :error      then :error
-      else raise UnexpectedState, volume.status
+      else raise UnexpectedState, volume.status.to_s
       end
     end
     def attached?
@@ -63,10 +98,10 @@ module Wucluster
 
     def mount!
       return true    if mounted?
-      return attach! unless attached?
+      unless attached? then attach! ; return :wait ; end
       case
       when volume.error?    then :error
-      when volume.attached? then node.mount(volume, mount_point)
+      when volume.attached? then node.mount(self)
       else raise UnexpectedState, "#{volume.status} - #{volume.mounted_status}"
       end
     end
@@ -89,12 +124,12 @@ module Wucluster
     def separate!
       case
       when separated?        then true
-      when mounted?          then unmount!
+      when mounted?          then unmount! ; :wait
       when volume.attached?  then volume.detach!
       when volume.detaching? then :wait
       when volume.attaching? then :wait
       when volume.error?     then :error
-      else raise UnexpectedState, volume.status
+      else raise UnexpectedState, volume.status.to_s
       end
     end
     def separated?
@@ -107,8 +142,8 @@ module Wucluster
       when (not created?)         then true
       when volume.snapshotting?   then :wait
       when created? && separated? then volume.snapshot!
-      when (not separated?)       then separate!
-      else raise UnexpectedState, volume.status
+      when (not separated?)       then separate! ; :wait
+      else raise UnexpectedState, volume.status.to_s
       end
     end
 
@@ -118,18 +153,18 @@ module Wucluster
 
     def delete!
       case
-      when deleted?                     then true
-      when (not separated?)             then separate!
-      when (not recently_snapshotted?)  then snapshot!
+      when ((!volume) || deleted?)      then true
+      when (not separated?)             then separate! ; :wait
+      when (not recently_snapshotted?)  then snapshot! ; :wait
       when volume.detached?             then volume.delete!
       when volume.deleting?             then :wait
       when volume.creating?             then :wait
       when volume.error?                then :error
-      else raise UnexpectedState, volume.status
+      else raise UnexpectedState, volume.status.to_s
       end
     end
     def deleted?
-      volume.uncreated?
+      volume.deleted?
     end
 
     #
@@ -140,9 +175,9 @@ module Wucluster
     end
 
     def new_blank_volume
-      Wucluster::Ec2Volume.new(
-        :size              => size,
-        :from_snapshot_id  => snapshot_id,
+      Wucluster::Ec2Volume.create!(
+        :size              => size.to_s,
+        :from_snapshot_id  => from_snapshot_id,
         :availability_zone => availability_zone,
         :device            => device
         )
@@ -153,92 +188,20 @@ module Wucluster
     #
 
     def snapshot!
-      MockSnapshot.create(volume)
+      return unless volume
+      Log.info "Creating snapshot for #{self} as #{handle}"
+      Wucluster::Ec2Snapshot.create! volume, handle
     end
-    def last_snapshot
-      MockSnapshot.get_last_snapshot(volume)
+    def newest_snapshot()
+      volume && volume.newest_snapshot
     end
     def recently_snapshotted?
-      snapshot = last_snapshot
-      snapshot && snapshot.recent?
+      volume && volume.recently_snapshotted?
     end
-
-    # # Summary name for this volume
-    # # Ex:  gibbon+master+01+00+/dev/sdh+/mnt/home+vol-1cfa0475
-    # def handle
-    #   [cluster, role, "%02d"%node_idx, "%02d"%node_vol_idx, device, mount_point, volume_id].join("+")
-    # end
-    # # readable-ish description
-    # def to_s
-    #   # "%-15s\tvolume for\t%15s\t%-7s\tnode #\t%7d\t%7d" % [mount_point, cluster, role, node_idx, node_vol_idx]
-    #   handle.gsub(/\+/,"\t")
-    # end
-    # # recreate volume from handle
-    # def self.from_handle handle
-    #   self.new *handle.split("+", self.keys.length)
-    # end
-    #
-    # def self.find volume_id
-    #   all[volume_id]
-    # end
-    #
-    # #
-    # # Delegate stuff to the contained volume
-    # #
-    # def volume
-    #   Ec2Volume.find(volume_id)
-    # end
-    #
-    # def detach!()
-    #   volume.detach! if volume
-    # end
-    # def delete_volume_if_has_recent_snapshot!
-    #   if volume
-    #     volume.delete_if_has_recent_snapshot!
-    #   else
-    #     Log.info "Skipping #{volume_id}: not in existence"
-    #   end
-    # end
-    # def attached?()
-    #   volume && volume.attached?
-    # end
-    # def snapshots()
-    #   volume ? volume.snapshots : []
-    # end
-    # def newest_snapshot()
-    #   snapshots.sort_by(&:created_at).last
-    # end
-    # def create_snapshot
-    #   if (!volume) then Log.info "Skipping new snapshot for #{description}: no volume" ; return end
-    #   if newest_snapshot && newest_snapshot.recent?
-    #     Log.info "Skipping new snapshot for #{volume_id}: #{newest_snapshot.description}"
-    #     return
-    #   end
-    #   volume.create_snapshot
-    # end
-    #
-    # #
-    # # Snapshot
-    # #
-    #
-    # # Create a snapshot of the volume, including metadata in
-    # # the description to make it recoverable
-    # def create_snapshot options={}
-    #   Log.info "Creating snapshot for #{id} as #{mount_handle}"
-    #   Wucluster.ec2.create_snapshot options.merge(:volume_id => self.id, :description => mount_handle   )
-    # end
-    #
-    # def newest_snapshot
-    #   snapshots.sort_by(&:created_at).find_all(&:completed?).last
-    # end
-    # def has_recent_snapshot?
-    #   newest_snapshot && newest_snapshot.recent?
-    # end
-    #
-    # # List Associated Snapshots
-    # def snapshots
-    #   Wucluster::Ec2Snapshot.for_volume id
-    # end
+    # List Associated Snapshots
+    def snapshots
+      Wucluster::Ec2Snapshot.for_volume volume
+    end
 
   end
 end

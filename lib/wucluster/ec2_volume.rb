@@ -25,10 +25,15 @@ module Wucluster
     # Specifies whether the Amazon EBS volume is deleted on instance termination.
     attr_accessor :deletes_on_termination
 
+    def to_s
+      %Q{#<#{self.class} #{id} #{status} #{size}GB #{availability_zone} #{created_at} att: #{attached_instance_id} @ #{attached_at}>}
+    end
+    def inspect
+      to_s
+    end
 
     # @example
-    #    deleted                  => :uncreated
-    #    nil                      => :uncreated
+    #    deleted                  => :deleted
     #    deleting                 => :deleting
     #    creating                 => :creating
     #    available    nil         => :detached
@@ -38,26 +43,26 @@ module Wucluster
     #    in_use       detaching   => :detaching
     #    error                    => :error
     #    *            error       => :error
-    def state
+    def status
       # refresh! if dirty?
       return :error if (existence_status == :error) || (attachment_status == :error)
       case existence_status
-      when :deleted, nil         then :uncreated
+      when :deleted              then :deleted
       when :creating             then :creating
       when :available
         case attachment_status
         when nil, :detached      then :detached
+        when :attaching          then :attaching
         else                     raise UnexpectedState, "#{existence_status} - #{attachment_status}" end
       when :in_use
         case attachment_status
-        when :attaching          then :attaching
         when :attached           then :attached
         when :detaching          then :detaching
         else                     raise UnexpectedState, "#{existence_status} - #{attachment_status}" end
       when :deleting             then :deleting
       end
     end
-    def uncreated?() status == :uncreated end
+    def deleted?()   status == :deleted   end
     def creating?()  status == :creating  end
     def created?()   [:in_use, :available].include?(existence_status) end
     def deleting?()  status == :deleting  end
@@ -67,6 +72,13 @@ module Wucluster
     def detaching?() status == :detaching end
     def error?()     status == :error     end
     def mounted?()   attached? && (mounted_status == :mounted) end
+
+    def mounted_status
+      false
+    end
+    def mount!
+      raise "Can't mount yet"
+    end
 
     #
     # Facade for EC2 API
@@ -83,6 +95,13 @@ module Wucluster
         )
       self.update! self.class.api_hsh_to_params(response)
       dirty!
+      self
+    end
+
+    def self.create! *args
+      vol = new *args
+      vol.create!
+      vol
     end
 
     # start attaching volume to its instance
@@ -96,6 +115,7 @@ module Wucluster
     def detach! options={}
       Log.info "Detaching #{self}"
       response = Wucluster.ec2.detach_volume options.merge(:volume_id => self.id, :instance_id => self.attached_instance_id, :device => device)
+      clear_attachment_info!
       self.update! self.class.attachment_hsh_to_params(response)
       dirty!
     end
@@ -105,7 +125,6 @@ module Wucluster
       Log.info "Deleting #{self}"
       response = Wucluster.ec2.delete_volume options.merge(:volume_id => self.id)
       Log.warn "Request returned funky existence_status: #{response["return"]}" unless (response["return"] == "true")
-      self.update! self.class.api_hsh_to_params(response)
       dirty!
     end
 
@@ -119,15 +138,21 @@ module Wucluster
     end
 
     def snapshots
-      Wucluster::Ec2Snapshot.snapshots_for_volume(self)
+      Wucluster::Ec2Snapshot.for_volume(self)
     end
 
-    def last_snapshot
+    def newest_snapshot
       snapshots.sort_by(&:created_at).last
     end
 
     def recently_snapshotted?
-      last_snapshot.recent?
+      newest_snapshot && newest_snapshot.recent?
+    end
+
+    def refresh!
+      clear_attachment_info!
+      response = Wucluster.ec2.describe_volumes(:volume_id => id, :owner_id => Settings.aws_account_id)
+      update! self.class.api_hsh_to_params(response.volumeSet.item.first)
     end
 
   protected
@@ -142,9 +167,8 @@ module Wucluster
       hsh = {
         :id                  => api_hsh['volumeId'],
         :from_snapshot_id    => api_hsh['snapshotId'],
-        :availability_zone   => api_hsh['availabilityZone'],
-        :existence_status    => api_hsh['status'].gsub(/-/,"_").to_sym,
-        :attachment_set      => api_hsh['attachmentSet'] }
+        :availability_zone   => api_hsh['availabilityZone'], }
+      hsh[:existence_status] = api_hsh['status'].gsub(/-/,"_").to_sym if api_hsh['status']
       hsh[:size]             = api_hsh['size'].to_i if api_hsh['size']
       hsh[:created_at]       = Time.parse(api_hsh['createTime']) if api_hsh['createTime']
       attachment_hsh = api_hsh['attachmentSet']['item'].first rescue nil
@@ -161,6 +185,10 @@ module Wucluster
         :attached_instance_id    => attachment_hsh['instanceId'],
         :attachment_status       => attachment_hsh['status'].to_sym,
       }
+    end
+
+    def clear_attachment_info!
+      [:attached_at, :attached_instance_id, :attachment_status].each{|attr| self.send("#{attr}=", nil)}
     end
 
     def update_from_response! response

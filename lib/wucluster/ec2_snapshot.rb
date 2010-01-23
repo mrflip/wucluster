@@ -45,10 +45,10 @@ module Wucluster
 
     # Create
     #
-    def self.create! volume_id, description
+    def self.create! volume, description
       Log.info "Creating #{description}."
-      response = Wucluster.ec2.create_snapshot(:volume_id => volume_id, :description => description)
-      self.update! self.class.api_hsh_to_params(response)
+      response = Wucluster.ec2.create_snapshot(:volume_id => volume.id, :description => description)
+      self.update! api_hsh_to_params(response)
       dirty!
     end
 
@@ -79,20 +79,8 @@ module Wucluster
       (status == :completed) && (progress == "100%")
     end
 
-
-    # Hash of all ec2_snapshots by their ID
-    def self.snapshots_map
-      @snapshots_map or self.load_snapshots!
-    end
-
-    # List of all snapshots
-    def self.snapshots
-      snapshots_map.values
-    end
-
-    # Retrieve snapshot from list of all snapshots, or by querying AWS directly
-    def self.find snapshot_id
-      snapshots_map[snapshot_id]
+    def self.for_volume volume
+      all.find_all{|snap| snap.volume_id == volume.id }
     end
 
   protected

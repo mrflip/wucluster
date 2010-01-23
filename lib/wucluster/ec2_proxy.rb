@@ -14,6 +14,7 @@ module Wucluster
       hsh.each do |attr, val|
         self.send("#{attr}=", val)
       end
+      self
     end
 
     def dirty!

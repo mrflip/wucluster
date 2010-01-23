@@ -6,9 +6,10 @@ module Wucluster
     attr_accessor :id
     # instance status: pending, running, shutting-down, terminated, stopping, stopped
     attr_accessor :status
-    # The name of the key pair.
+    # The name of the AWS key pair, used for remote access to instance
     attr_accessor :key_name
-    # Name of the security group.
+    # Name of the security group. Act as both logical labels for the instance
+    # and define its security policy
     attr_accessor :security_groups
     # Placement constraints (Availability Zones) for launching the instances.
     attr_accessor :availability_zone
@@ -23,37 +24,27 @@ module Wucluster
     #
     attr_accessor :image_id
 
-    # retrieve info for all volumes from AWS
-    def self.each_api_item &block
-      response = Wucluster.ec2.describe_instances
-      p [response, response.reservationSet.item]
-      response.reservationSet.item.each(&block)
-    end
+    def pending?() status       == :pending end
+    def running?()  status      == :running    end
+    def terminated?() status    == :terminated end
+    def shutting_down?() status == :shutting_down end
 
     def to_hash
       %w[id status key_name security_groups availability_zone instance_type public_ip private_ip created_at image_id
         ].inject({}){|hsh, attr| hsh[attr.to_sym] = self.send(attr); hsh}
     end
 
-    # construct instance using hash as sent back from AWS
-    def self.api_hsh_to_params(api_hsh)
-      instance_info = api_hsh.instancesSet.item.first
-      group_info    = api_hsh.groupSet.item
-      hsh = {
-        :id              => instance_info["instanceId"],
-        :key_name        => instance_info["keyName"],
-        :instance_type   => instance_info["instanceType"],
-        :public_ip       => instance_info["ipAddress"],
-        :private_ip      => instance_info["privateIpAddress"],
-        :security_groups => group_info.map{|gh| gh['groupId']},
-        :image_id        => instance_info["imageId"],
-        # "kernelId" => "aki-a71cf9ce", "amiLaunchIndex"=>"0", "reason"=>nil, "rootDeviceType"=>"instance-store", "blockDeviceMapping" =>nil, "ramdiskId"=>"ari-a51cf9cc", "productCodes"       =>nil,
-      }
-      hsh[:created_at]        = Time.parse(instance_info["launchTime"])        rescue nil
-      hsh[:availability_zone] = instance_info["placement"]['availabilityZone'] rescue nil
-      hsh[:status]            = instance_info["instanceState"]['name']         rescue nil
-      hsh
+    def to_s
+      %Q{#<#{self.class} #{id} #{status} #{key_name} #{security_groups.inspect} #{public_ip} #{private_ip} #{created_at} #{instance_type} #{availability_zone} #{image_id}>}
     end
+    def inspect
+      to_s
+    end
+
+    # ===========================================================================
+    #
+    # Actions
+    #
 
     # Launches a specified number of instances of an AMI for which you have permissions.
     #
@@ -89,6 +80,44 @@ module Wucluster
       Log.warn "Request returned funky status: #{new_state}" unless (['shutting-down', 'terminated'].include? new_state)
       dirty!
       response
+    end
+
+    # ===========================================================================
+    #
+    # API
+    #
+
+    # retrieve info for all volumes from AWS
+    def self.each_api_item &block
+      response = Wucluster.ec2.describe_instances
+      p [response, response.reservationSet.item]
+      response.reservationSet.item.each(&block)
+    end
+
+    def refresh!
+      response = Wucluster.ec2.describe_instances(:instance_id => id)
+      p [response, response.reservationSet.item]
+      update! self.class.api_hsh_to_params(response.reservationSet.item.first)
+    end
+
+    # construct instance using hash as sent back from AWS
+    def self.api_hsh_to_params(api_hsh)
+      instance_info = api_hsh.instancesSet.item.first
+      group_info    = api_hsh.groupSet.item
+      hsh = {
+        :id              => instance_info["instanceId"],
+        :key_name        => instance_info["keyName"],
+        :instance_type   => instance_info["instanceType"],
+        :public_ip       => instance_info["ipAddress"],
+        :private_ip      => instance_info["privateIpAddress"],
+        :security_groups => group_info.map{|gh| gh['groupId']},
+        :image_id        => instance_info["imageId"],
+        # "kernelId" => "aki-a71cf9ce", "amiLaunchIndex"=>"0", "reason"=>nil, "rootDeviceType"=>"instance-store", "blockDeviceMapping" =>nil, "ramdiskId"=>"ari-a51cf9cc", "productCodes"       =>nil,
+      }
+      hsh[:created_at]        = Time.parse(instance_info["launchTime"])                     rescue nil
+      hsh[:availability_zone] = instance_info["placement"]['availabilityZone']              rescue nil
+      hsh[:status]            = instance_info["instanceState"]['name'].gsub(/-/,'_').to_sym rescue nil
+      hsh
     end
 
   end
