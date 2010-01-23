@@ -31,50 +31,121 @@ module Wucluster
     #
     # Imperatives
     #
-    def instantiate!
-      # if we have a volume,
-      self.volume ||= Ec2Volume.new
-      volume.instantiate!
+    def create!
+      volume = new_blank_volume if volume.nil? || volume.deleted?
+      case volume.status
+      when :created   then true
+      when :uncreated then volume.create!
+      when :deleting  then :wait
+      when :creating  then :wait
+      when :error     then :error
+      else raise UnexpectedState, volume.status
+      end
     end
-    def attach!
-      volume.attach(node.instance)
-    end
-    def mount!
-      node.mount(volume, mount_point)
-    end
-    def unmount!
-      node.unmount(mount_point)
-    end
-    def separate!
-      return if (!volume) || (volume.detached?)
-      volume.detach!
+    def created?
+      volume && volume.created?
     end
 
-    def instantiated?
+    def attach!
+      return create! unless created?
+      case volume.status
+      when :attached   then true
+      when :detached   then volume.attach!
+      when :attaching  then :wait
+      when :detaching  then :wait
+      when :error      then :error
+      else raise UnexpectedState, volume.status
+      end
     end
     def attached?
-    end
-    def mounted?
-    end
-    def separated?
-    end
-    def recently_snapshotted?
-    end
-    def terminated?
+      volume && volume.attached?
     end
 
-    # def attached?() refresh_if_dirty! ; volume.attached? ;           end
-    # def detached?() refresh_if_dirty! ; volume.detached? ;           end
-    # def attaching?() refresh_if_dirty! ; volume.attaching? ;         end
-    # def detaching?() refresh_if_dirty! ; volume.detaching? ;         end
-    # def instantiating?() refresh_if_dirty! ; volume.instantiating? ; end
-    # def deleting?() refresh_if_dirty! ; volume.deleting? ;           end
+    def mount!
+      return true    if mounted?
+      return attach! unless attached?
+      case
+      when volume.error?    then :error
+      when volume.attached? then node.mount(volume, mount_point)
+      else raise UnexpectedState, "#{volume.status} - #{volume.mounted_status}"
+      end
+    end
+    def mounted?
+      volume && volume.mounted?
+    end
+
+    def unmount!
+      return true    if unmounted?
+      case
+      when volume.error?    then :error
+      when volume.mounted? then node.unmount(volume, mount_point)
+      else raise UnexpectedState, "#{volume.status} - #{volume.mounted_status}"
+      end
+    end
+    def unmounted?
+      (not mounted?) && (not error?)
+    end
+
+    def separate!
+      case
+      when separated?        then true
+      when mounted?          then unmount!
+      when volume.attached?  then volume.detach!
+      when volume.detaching? then :wait
+      when volume.attaching? then :wait
+      when volume.error?     then :error
+      else raise UnexpectedState, volume.status
+      end
+    end
+    def separated?
+      (not created?) || (volume.detached?)
+    end
+
+    def snapshot!
+      case
+      when recently_snapshotted?  then true
+      when (not created?)         then true
+      when volume.snapshotting?   then :wait
+      when created? && separated? then volume.snapshot!
+      when (not separated?)       then separate!
+      else raise UnexpectedState, volume.status
+      end
+    end
+
+    def recently_snapshotted?
+      volume.recently_snapshotted?
+    end
+
+    def delete!
+      case
+      when deleted?                     then true
+      when (not separated?)             then separate!
+      when (not recently_snapshotted?)  then snapshot!
+      when volume.detached?             then volume.delete!
+      when volume.deleting?             then :wait
+      when volume.creating?             then :wait
+      when volume.error?                then :error
+      else raise UnexpectedState, volume.status
+      end
+    end
+    def deleted?
+      volume.uncreated?
+    end
 
     #
     # Volume Cache
     #
     def refresh_if_dirty!
       true
+    end
+
+    def new_blank_volume
+      Wucluster::Ec2Volume.new(
+        :size              => size,
+        :from_snapshot_id  => snapshot_id,
+        :availability_zone => availability_zone,
+        :device            => device
+        )
     end
 
     #

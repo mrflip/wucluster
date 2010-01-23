@@ -1,4 +1,3 @@
-require 'wucluster/ec2_instance/api'
 module Wucluster
   class Ec2Instance
     include Ec2Proxy

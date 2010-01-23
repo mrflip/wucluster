@@ -1,4 +1,3 @@
-require 'wucluster/ec2_volume/api'
 module Wucluster
   class Ec2Volume
     include Ec2Proxy
@@ -12,13 +11,13 @@ module Wucluster
     # Availability Zone in which the volume was created.
     attr_accessor :availability_zone
     # Volume state: creating, available, in-use, deleting, deleted, error
-    attr_accessor :status
+    attr_accessor :existence_status
     # Time stamp when volume creation was initiated.
     attr_accessor :created_at
     # AWS ID of the attached instance, if any
     attr_accessor :attached_instance_id
     # Specifies how the device is exposed to the instance (e.g., /dev/sdh).
-    attr_accessor :attachment_device
+    attr_accessor :device
     # Attachment status: attaching, attached, detaching, detached, error
     attr_accessor :attachment_status
     # Time stamp when the attachment initiated.
@@ -26,17 +25,55 @@ module Wucluster
     # Specifies whether the Amazon EBS volume is deleted on instance termination.
     attr_accessor :deletes_on_termination
 
-    # Snapshot this volume was created from.
-    def from_snapshot
-      Wucluster::Ec2Snapshot.find(snapshot_id)
+
+    # @example
+    #    deleted                  => :uncreated
+    #    nil                      => :uncreated
+    #    deleting                 => :deleting
+    #    creating                 => :creating
+    #    available    nil         => :detached
+    #    available    detached    => :detached
+    #    in_use       attaching   => :attaching
+    #    in_use       attached    => :attached
+    #    in_use       detaching   => :detaching
+    #    error                    => :error
+    #    *            error       => :error
+    def state
+      # refresh! if dirty?
+      return :error if (existence_status == :error) || (attachment_status == :error)
+      case existence_status
+      when :deleted, nil         then :uncreated
+      when :creating             then :creating
+      when :available
+        case attachment_status
+        when nil, :detached      then :detached
+        else                     raise UnexpectedState, "#{existence_status} - #{attachment_status}" end
+      when :in_use
+        case attachment_status
+        when :attaching          then :attaching
+        when :attached           then :attached
+        when :detaching          then :detaching
+        else                     raise UnexpectedState, "#{existence_status} - #{attachment_status}" end
+      when :deleting             then :deleting
+      end
     end
+    def uncreated?() status == :uncreated end
+    def creating?()  status == :creating  end
+    def created?()   [:in_use, :available].include?(existence_status) end
+    def deleting?()  status == :deleting  end
+    def detached?()  status == :detached  end
+    def attaching?() status == :attaching end
+    def attached?()  status == :attached  end
+    def detaching?() status == :detaching end
+    def error?()     status == :error     end
+    def mounted?()   attached? && (mounted_status == :mounted) end
 
     #
     # Facade for EC2 API
     #
 
     # start creating volume
-    def instantiate! options={}
+    def create! options={}
       # return if instantiating?
       Log.info "Instantiating #{self}"
       response = Wucluster.ec2.create_volume options.merge(
@@ -49,27 +86,48 @@ module Wucluster
     end
 
     # start attaching volume to its instance
-    def attach! instance, attachment_device, options={}
+    def attach! instance, device, options={}
       Log.info "Attaching #{self}"
-      response = Wucluster.ec2.attach_volume options.merge( :volume_id => self.id, :instance_id => instance.id, :device => attachment_device)
+      response = Wucluster.ec2.attach_volume options.merge( :volume_id => self.id, :instance_id => instance.id, :device => device)
       self.update! self.class.attachment_hsh_to_params(response)
       dirty!
     end
     # start removing volume from its instance
     def detach! options={}
       Log.info "Detaching #{self}"
-      response = Wucluster.ec2.detach_volume options.merge(:volume_id => self.id, :instance_id => self.attached_instance_id, :device => attachment_device)
+      response = Wucluster.ec2.detach_volume options.merge(:volume_id => self.id, :instance_id => self.attached_instance_id, :device => device)
       self.update! self.class.attachment_hsh_to_params(response)
       dirty!
     end
     # start deleting volume
     def delete! options={}
-      return if status == 'deleting'
+      return if existence_status == 'deleting'
       Log.info "Deleting #{self}"
       response = Wucluster.ec2.delete_volume options.merge(:volume_id => self.id)
-      Log.warn "Request returned funky status: #{response["return"]}" unless (response["return"] == "true")
+      Log.warn "Request returned funky existence_status: #{response["return"]}" unless (response["return"] == "true")
       self.update! self.class.api_hsh_to_params(response)
       dirty!
+    end
+
+    #
+    # Snapshots
+    #
+
+    # Snapshot this volume was created from.
+    def from_snapshot
+      Wucluster::Ec2Snapshot.find(snapshot_id)
+    end
+
+    def snapshots
+      Wucluster::Ec2Snapshot.snapshots_for_volume(self)
+    end
+
+    def last_snapshot
+      snapshots.sort_by(&:created_at).last
+    end
+
+    def recently_snapshotted?
+      last_snapshot.recent?
     end
 
   protected
@@ -85,7 +143,7 @@ module Wucluster
         :id                  => api_hsh['volumeId'],
         :from_snapshot_id    => api_hsh['snapshotId'],
         :availability_zone   => api_hsh['availabilityZone'],
-        :status              => api_hsh['status'].gsub(/-/,"_").to_sym,
+        :existence_status    => api_hsh['status'].gsub(/-/,"_").to_sym,
         :attachment_set      => api_hsh['attachmentSet'] }
       hsh[:size]             = api_hsh['size'].to_i if api_hsh['size']
       hsh[:created_at]       = Time.parse(api_hsh['createTime']) if api_hsh['createTime']
@@ -98,7 +156,7 @@ module Wucluster
       return {} unless attachment_hsh
       {
         :attached_at             => Time.parse(attachment_hsh['attachTime']),
-        :attachment_device       => attachment_hsh['device'],
+        :device       => attachment_hsh['device'],
         :deletes_on_termination  => attachment_hsh['deleteOnTermination'],
         :attached_instance_id    => attachment_hsh['instanceId'],
         :attachment_status       => attachment_hsh['status'].to_sym,

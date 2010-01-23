@@ -4,8 +4,7 @@ module Wucluster
   #
   class Ec2Snapshot
     include Ec2Proxy
-    # Time window for figuring if a snapshot is recent
-    RECENT_SNAPSHOT_AGE = 2*60*60
+    ::Settings.describe :recent_snapshot_age, :default => (12*60*60), :description => "Time window for figuring if a snapshot is recent"
 
     # Snapshot AWS id
     attr_accessor :id
