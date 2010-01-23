@@ -20,6 +20,9 @@ module Wucluster
       self.size          = size
       self.volume_id     = volume_id
     end
+    def self.from_hsh hsh
+      new hsh[:cluster], hsh[:role], hsh[:node_idx], hsh[:node_vol_idx], hsh[:device], hsh[:mount_point], hsh[:size], hsh[:volume_id]
+    end
 
     def to_s
       %Q{#<#{self.class} #{cluster.name}-#{role}-#{"%03d"%node_idx}-#{"%03d"%node_vol_idx} #{volume_id} #{size}GB #{device}~#{mount_point} #{status}>}
@@ -29,11 +32,11 @@ module Wucluster
     end
 
     def id
-      [cluster, role, "%03d"%node_idx, "%03d"%node_vol_idx].join("+")
+      [cluster.name, role, "%03d"%node_idx, "%03d"%node_vol_idx].join("+")
     end
 
     def handle
-      [cluster, role, "%03d"%node_idx, "%03d"%node_vol_idx, device, mount_point, volume_id, size].join("+")
+      [cluster.name, role, "%03d"%node_idx, "%03d"%node_vol_idx, device, mount_point, volume_id, size].join("+")
     end
 
     def availability_zone
@@ -73,14 +76,12 @@ module Wucluster
       case
       when created?   then true
       when (volume.nil? || volume.deleted? || volume.deleting?)
-        vol = Wucluster::Ec2Volume.create!(
+        self.volume = Wucluster::Ec2Volume.create!(
           :size              => size.to_s,
           :from_snapshot_id  => from_snapshot_id,
           :availability_zone => availability_zone,
           :device            => device
           )
-        Wucluster::Ec2Volume.load_all!
-        self.volume = Wucluster::Ec2Volume.find(vol.id)
       when volume.creating?  then :wait
       when volume.error?     then :error
       else raise UnexpectedState, volume.status.to_s

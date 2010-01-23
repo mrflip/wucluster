@@ -36,7 +36,7 @@ module Wucluster
       end
       #
       def register obj
-        @objs_list[obj.id] = obj
+        @objs_list[obj.id] = obj if obj.id
       end
 
       # Remove the object
@@ -58,9 +58,13 @@ module Wucluster
       # retrieve info for all volumes from AWS
       def load_all!
         Log.info "Loading #{self} list"
+        old_objs   = @objs_list || {}
         @objs_list = {}
         each_api_item do |api_hsh|
-          self.new api_hsh_to_params(api_hsh)
+          params = api_hsh_to_params(api_hsh)
+          if   obj = old_objs[params[:id]] then obj.update! params
+          else obj = self.new(params) end
+          register obj
         end
         Log.info "Loaded list of #{@objs_list.length} #{self}s"
         @objs_list

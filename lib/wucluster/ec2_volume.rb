@@ -74,13 +74,6 @@ module Wucluster
     def error?()     status == :error     end
     def mounted?()   attached? && (mounted_status == :mounted) end
 
-    def mounted_status
-      false
-    end
-    def mount!
-      raise "Can't mount yet"
-    end
-
     #
     # Facade for EC2 API
     #
@@ -96,6 +89,7 @@ module Wucluster
         )
       p response
       self.update! self.class.api_hsh_to_params(response)
+      self.class.register self
       dirty!
       self
     end
@@ -103,7 +97,6 @@ module Wucluster
     def self.create! *args
       vol = new *args
       vol.create!
-      p vol
       vol
     end
 
@@ -129,6 +122,17 @@ module Wucluster
       response = Wucluster.ec2.delete_volume options.merge(:volume_id => self.id)
       Log.warn "Request returned funky existence_status: #{response["return"]}" unless (response["return"] == "true")
       dirty!
+    end
+
+    #
+    # Mounting
+    #
+
+    def mounted_status
+      false
+    end
+    def mount!
+      raise "Can't mount yet"
     end
 
     #

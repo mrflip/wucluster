@@ -68,8 +68,8 @@ module Wucluster
       response = Wucluster.ec2.run_instances options.merge(:image_id => image_id,
         :key_name => key_name, :security_groups => security_groups, :availability_zone => availability_zone,
         :instance_type => instance_type)
-      p response
       update! self.class.api_hsh_to_params(response)
+      self.class.register self
       undirty!
     end
 
