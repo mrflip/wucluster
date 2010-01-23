@@ -44,11 +44,21 @@ module Wucluster
       Ec2Volume.find(volume_id)
     end
 
+    def volume=(ec2_volume)
+      Log.info "Setting volume to #{ec2_volume} from #{@volume_id}"
+      @volume_id = ec2_volume ? ec2_volume.id : nil
+    end
+
     def status
       volume ? volume.status : "(absent)"
     end
     def refresh!
-      volume && volume.refresh!
+      return self unless volume
+      begin
+        volume.refresh!
+      rescue AWS::Error => e
+        self.volume = nil if e.to_s =~ /volume.*does not exist/
+      end
       self
     end
 
@@ -56,19 +66,21 @@ module Wucluster
       cluster.find_node role, node_idx
     end
 
-    def volume=(ec2_volume)
-      @volume_id = ec2_volume ? ec2_volume.id : nil
-    end
-
     #
     # Imperatives
     #
     def create!
-      self.volume = new_blank_volume if volume.nil? || volume.deleted?
       case
-      when volume.created?   then true
-      when volume.deleted?   then volume.create! ; :wait
-      when volume.deleting?  then :wait
+      when created?   then true
+      when (volume.nil? || volume.deleted? || volume.deleting?)
+        vol = Wucluster::Ec2Volume.create!(
+          :size              => size.to_s,
+          :from_snapshot_id  => from_snapshot_id,
+          :availability_zone => availability_zone,
+          :device            => device
+          )
+        Wucluster::Ec2Volume.load_all!
+        self.volume = Wucluster::Ec2Volume.find(vol.id)
       when volume.creating?  then :wait
       when volume.error?     then :error
       else raise UnexpectedState, volume.status.to_s
@@ -82,6 +94,7 @@ module Wucluster
       unless created? && node.running?
         create!
         node.run!
+        return
       end
       case volume.status
       when :attached   then true
@@ -172,15 +185,6 @@ module Wucluster
     #
     def refresh_if_dirty!
       true
-    end
-
-    def new_blank_volume
-      Wucluster::Ec2Volume.create!(
-        :size              => size.to_s,
-        :from_snapshot_id  => from_snapshot_id,
-        :availability_zone => availability_zone,
-        :device            => device
-        )
     end
 
     #

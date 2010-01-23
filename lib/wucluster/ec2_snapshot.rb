@@ -47,9 +47,11 @@ module Wucluster
     #
     def self.create! volume, description
       Log.info "Creating #{description}."
+      snap = self.new(:volume_id => volume.id)
       response = Wucluster.ec2.create_snapshot(:volume_id => volume.id, :description => description)
-      self.update! api_hsh_to_params(response)
+      snap.update! api_hsh_to_params(response)
       dirty!
+      snap
     end
 
     # Delete the snapshot on the AWS side

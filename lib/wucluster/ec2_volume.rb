@@ -41,6 +41,7 @@ module Wucluster
     #    in_use       attaching   => :attaching
     #    in_use       attached    => :attached
     #    in_use       detaching   => :detaching
+    #    in_use       busy        => :busy
     #    error                    => :error
     #    *            error       => :error
     def status
@@ -87,12 +88,13 @@ module Wucluster
     # start creating volume
     def create! options={}
       # return if instantiating?
-      Log.info "Instantiating #{self}"
+      Log.info "Creating #{self}"
       response = Wucluster.ec2.create_volume options.merge(
         :availability_zone => self.availability_zone,
         :size              => self.size,
         :snapshot_id       => self.from_snapshot_id
         )
+      p response
       self.update! self.class.api_hsh_to_params(response)
       dirty!
       self
@@ -101,19 +103,20 @@ module Wucluster
     def self.create! *args
       vol = new *args
       vol.create!
+      p vol
       vol
     end
 
     # start attaching volume to its instance
     def attach! instance, device, options={}
-      Log.info "Attaching #{self}"
+      Log.info "Attaching #{self} to #{instance} as #{device}"
       response = Wucluster.ec2.attach_volume options.merge( :volume_id => self.id, :instance_id => instance.id, :device => device)
       self.update! self.class.attachment_hsh_to_params(response)
       dirty!
     end
     # start removing volume from its instance
     def detach! options={}
-      Log.info "Detaching #{self}"
+      Log.info "Detaching #{self} from #{attached_instance_id}"
       response = Wucluster.ec2.detach_volume options.merge(:volume_id => self.id, :instance_id => self.attached_instance_id, :device => device)
       clear_attachment_info!
       self.update! self.class.attachment_hsh_to_params(response)
