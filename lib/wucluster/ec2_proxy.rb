@@ -4,7 +4,8 @@ module Wucluster
   #
   module Ec2Proxy
 
-    #
+    # Pass a hash of attribute-values;
+    # calls setter for each.
     def initialize hsh
       update! hsh
     end
@@ -36,6 +37,7 @@ module Wucluster
       end
       #
       def register obj
+        @objs_list ||= {}
         @objs_list[obj.id] = obj if obj.id
       end
 
@@ -52,7 +54,7 @@ module Wucluster
 
       # Retrieve volume from volumes map, or by querying AWS directly
       def find id
-        @objs_list[id]
+        @objs_list[id] if @objs_list
       end
 
       # retrieve info for all volumes from AWS

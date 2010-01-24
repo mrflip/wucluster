@@ -30,7 +30,7 @@ module Wucluster
     end
 
     def status
-      instance.status
+      instance ? instance.status : :absent
     end
 
     def refresh!
@@ -40,6 +40,11 @@ module Wucluster
 
     def instance
       Wucluster::Ec2Instance.find instance_id
+    end
+
+    def instance=(ec2_instance)
+      Log.info "Setting instance to #{ec2_instance} from #{@instance_id}"
+      @instance_id = ec2_instance ? ec2_instance.id : nil
     end
 
     # Placement constraints (Availability Zones) for launching the instances.
@@ -60,19 +65,24 @@ module Wucluster
     #   cluster = Cluster.new :bonobo
     #   Node.new cluster, :master, 0,
     def security_groups
-      [cluster.name, "#{cluster.name}-#{role}"]
+      [cluster.name.to_s, "#{cluster.name.to_s}-#{role}"]
     end
 
     # The name of the AWS key pair, used for remote access to instance
     def key_name
-      cluster.name
+      cluster.name.to_s
     end
 
     def run!
       case
       when instance.nil? || instance.terminated?
-        self.instance = new_blank_instance
-        instance.run!
+      Wucluster::Ec2Instance.create!({
+          :image_id          => image_id,
+          :key_name          => key_name,
+          :security_groups   => security_groups,
+          :availability_zone => availability_zone,
+          :instance_type     => instance_type,
+        })
       when instance.running?        then true
       when instance.pending?        then :wait
       when instance.shutting_down?  then :wait
@@ -82,20 +92,31 @@ module Wucluster
     def running?
       instance && instance.running?
     end
-    def new_blank_instance
-      Wucluster::Ec2Instance.new({
-          :image_id          => image_id,
-          :key_name          => key_name,
-          :security_groups   => security_groups,
-          :availability_zone => availability_zone,
-          :instance_type     => instance_type,
-        })
+
+    # As appropriate, start or run the instance
+    def create!
+      run!
+    end
+    # synonym for running?
+    def created?
+      running?
     end
 
+    # Terminate the instance.
     def terminate!
+      Log.info "Terminating #{self}"
     end
+
     def terminated?
-      (!instance) || instance.terminated?
+      instance.nil? || instance.terminated?
+    end
+
+    # As appropriate, stop or terminate the instance if it's running
+    def delete!()
+      terminate!
+    end
+    def deleted?
+      terminated?
     end
 
 

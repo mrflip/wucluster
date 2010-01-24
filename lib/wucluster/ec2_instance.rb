@@ -24,10 +24,10 @@ module Wucluster
     #
     attr_accessor :image_id
 
-    def pending?() status       == :pending end
-    def running?()  status      == :running    end
-    def terminated?() status    == :terminated end
-    def shutting_down?() status == :shutting_down end
+    def pending?()       status == :pending        end
+    def running?()       status == :running        end
+    def terminated?()    status == :terminated     end
+    def shutting_down?() status == :shutting_down  end
 
     def to_hash
       %w[id status key_name security_groups availability_zone instance_type public_ip private_ip created_at image_id
@@ -65,16 +65,29 @@ module Wucluster
     # @option options [optional, String] :instance_initiated_shutdown_behavior ('stop') Specifies whether the instance's Amazon EBS volumes are stopped or terminated when the instance is shut down. Valid values : 'stop', 'terminate'
     #
     def run! options={}
+      return :wait if pending? || running?
+      Log.info "Running #{self}"
+      Ec2Keypair.exist! key_name
       response = Wucluster.ec2.run_instances options.merge(:image_id => image_id,
         :key_name => key_name, :security_groups => security_groups, :availability_zone => availability_zone,
         :instance_type => instance_type)
       update! self.class.api_hsh_to_params(response)
+      p [self, response]
       self.class.register self
       undirty!
     end
 
+    # make a new volume proxy and create it on the remote end
+    def self.create! *args
+      inst = new *args
+      inst.run!
+      inst
+    end
+
     # The TerminateInstances operation shuts down one or more instances.
     def terminate! options={}
+      return :wait if terminating? || terminated?
+      Log.info "Running #{self}"
       response = Wucluster.ec2.terminate_instances options.merge(:instance_id => [self.id])
       new_state = response.instancesSet.item.first.currentState.name rescue nil
       Log.warn "Request returned funky status: #{new_state}" unless (['shutting-down', 'terminated'].include? new_state)
@@ -119,37 +132,19 @@ module Wucluster
       hsh[:status]            = instance_info["instanceState"]['name'].gsub(/-/,'_').to_sym rescue nil
       hsh
     end
-
   end
 end
 
-
-    # def merge_api_response! response
-    #   instance_info = response.instancesSet.item.first
-    #   instance_info.each do |api_attr, val|
-    #     attr = API_ATTR_MAPPING[api_attr] or next
-    #     self.send("#{attr}=", val)
-    #   end
-    #   group_info = response.groupSet.item
-    #   self.security_groups = group_info.map{|gh| gh['groupId']}
-    # end
-
-    # Output type identifier ("RESERVATION", "INSTANCE")
-    # AMI ID of the image on which the instance is based
-    # AMI launch index
-    # Product codes attached to the instance
-    # Monitoring state
-
-    # #
-    # def start! options={}
-    #   resp = Wucluster.ec2.start_instances     options.merge(:instance_id => [self.id])
-    # end
-    # #
-    # def stop! options={}
-    #   resp = Wucluster.ec2.stop_instances      options.merge(:instance_id => [self.id])
-    # end
-    # #
-    # def reboot! options={}
-    #   resp = Wucluster.ec2.reboot_instances    options.merge(:instance_id => [self.id])
-    # end
-    # #
+#
+# def start! options={}
+#   resp = Wucluster.ec2.start_instances     options.merge(:instance_id => [self.id])
+# end
+# #
+# def stop! options={}
+#   resp = Wucluster.ec2.stop_instances      options.merge(:instance_id => [self.id])
+# end
+# #
+# def reboot! options={}
+#   resp = Wucluster.ec2.reboot_instances    options.merge(:instance_id => [self.id])
+# end
+# #

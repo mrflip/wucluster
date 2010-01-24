@@ -49,10 +49,9 @@ module Wucluster
     end
 
     def attach!
-      create!
       repeat_until :attached? do
-        mounts.each(&:attach!)
         Log.info "Attaching #{self}"
+        mounts.each(&:attach!)
       end
     end
     # are all mounts attached to their nodes?
@@ -63,10 +62,9 @@ module Wucluster
     # mount the cluster: #attach! and then demand all mounts are mounted within
     # their node.
     def mount!
-      attach!
       repeat_until :mounted? do
-        mounts.each(&:mount!)
         Log.info "Mounting #{self}"
+        mounts.each(&:mount!)
       end
     end
     # are all mounts attached to their nodes?
@@ -78,8 +76,8 @@ module Wucluster
     # their node.
     def unmount!
       repeat_until :unmounted? do
+        Log.info "Unmounting #{self}"
         mounts.each(&:unmount!)
-        Log.info "Mounting #{self}"
       end
     end
     # All mounts are unmounted on their nodes
@@ -89,10 +87,9 @@ module Wucluster
 
     # Ask each mount to separate from its node
     def separate!
-      unmount!
       repeat_until :separated? do
-        mounts.each(&:separate!)
         Log.info "Separating #{self}"
+        mounts.each(&:separate!)
       end
     end
     # are all mounts separated from their nodes?
@@ -103,10 +100,9 @@ module Wucluster
     # Ask each mount to create a snapshot of its volume, including metadata in
     # to make it recoverable
     def snapshot!
-      separate!
       repeat_until :recently_snapshotted? do
-        mounts.each(&:snapshot!)
         Log.info "Snapshotting #{self}"
+        mounts.each(&:snapshot!)
       end
     end
     # have all mounts been recently snapshotted?
@@ -116,8 +112,6 @@ module Wucluster
 
     # Ask each mount to delete its volume
     def delete!
-      raise "Tried to delete while not separated"                  if (! separated?)
-      raise "out of order - tried to delete while not snapshotted" if (! recently_snapshotted?)
       repeat_until :deleted? do
         mounts.each(&:delete!)
         nodes.each( &:delete!)
@@ -129,5 +123,21 @@ module Wucluster
       mounts.all?(&:deleted?) && nodes.all?(&:deleted?)
     end
 
+  protected
+    # repeat_until test, [sleep_time]
+    #
+    # * runs block
+    # * tests for completion by calling (on self) the no-arg method +test+
+    # * if the test fails, sleep for a bit...
+    # * ... and then try again
+    #
+    # will only attempt MAX_TRIES times
+    def repeat_until test, &block
+      Settings.max_tries.times do
+        yield
+        break if self.send(test)
+        sleep Settings.sleep_time
+      end
+    end
   end
 end

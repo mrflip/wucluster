@@ -53,8 +53,12 @@ module Wucluster
     end
 
     def status
-      volume ? volume.status : "(absent)"
+      volume ? volume.status : :absent
     end
+    def error?
+      volume && volume.error?
+    end
+
     def refresh!
       return self unless volume
       begin
@@ -178,7 +182,7 @@ module Wucluster
       end
     end
     def deleted?
-      volume.deleted?
+      volume.nil? || volume.deleted?
     end
 
     #

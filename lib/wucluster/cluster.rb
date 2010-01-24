@@ -1,39 +1,40 @@
+require 'wucluster/cluster/description'
+require 'wucluster/cluster/commands'
 module Wucluster
   #
   # Cluster holds our idea of a hadoop cluster,
   # as embodied in the hadoop-ec2 config files
   #
   class Cluster
-    ::Settings.define :aws_availability_zone, :default => 'us-east-1d', :description => "default availability zone for the cluster. For a bunch of good reasons, all parts of a cluster should be in the same availability zone"
+    # Name for this cluster. Security groups, key names and other attributes are
+    # defined from this name.
     attr_accessor :name
+    # availability zone for cluster. Cluster elements must all share an
+    # availability zone
     attr_accessor :availability_zone
+    # default image_id for cluster nodes
+    attr_accessor :image_id
+    # default instance type for cluster nodes
+    attr_accessor :instance_type
 
     def initialize name, availability_zone = nil
       self.name              = name.to_sym
       self.availability_zone = availability_zone || Settings.aws_availability_zone
     end
 
-    def to_s
-      [ self.class, self.name,
-        mounts.first.class, mounts.map(&:to_s).join(', ')
-      ].map(&:to_s).join(" - ")
+    def roles
+      all_nodes.keys.map(&:first).uniq
+    end
+    def roles_count
+      roles_count = Hash.new{|h,k| 0 }
+      all_nodes.keys.each do |role, node_idx|
+        roles_count[role] += 1
+      end
+      roles_count
     end
 
-  protected
-    # repeat_until test, [sleep_time]
-    #
-    # * runs block
-    # * tests for completion by calling (on self) the no-arg method +test+
-    # * if the test fails, sleep for a bit...
-    # * ... and then try again
-    #
-    # will only attempt MAX_TRIES times
-    def repeat_until test, &block
-      MAX_TRIES.times do
-        yield
-        break if self.send(test)
-        sleep SLEEP_TIME
-      end
+    def to_s
+      %Q{<##{self.class} #{self.name} nodes: #{roles_count.inspect} #{mounts.length} mounts>}
     end
   end
 end

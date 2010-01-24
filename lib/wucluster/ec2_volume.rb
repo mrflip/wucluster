@@ -80,7 +80,7 @@ module Wucluster
 
     # start creating volume
     def create! options={}
-      # return if instantiating?
+      return :wait if creating? || created?
       Log.info "Creating #{self}"
       response = Wucluster.ec2.create_volume options.merge(
         :availability_zone => self.availability_zone,
@@ -94,30 +94,35 @@ module Wucluster
       self
     end
 
-    def self.create! *args
-      vol = new *args
+    # make a new volume proxy and create it on the remote end
+    def self.create! hsh
+      vol = new hsh
       vol.create!
       vol
     end
 
     # start attaching volume to its instance
     def attach! instance, device, options={}
+      return :wait if attaching? || attached?
       Log.info "Attaching #{self} to #{instance} as #{device}"
       response = Wucluster.ec2.attach_volume options.merge( :volume_id => self.id, :instance_id => instance.id, :device => device)
       self.update! self.class.attachment_hsh_to_params(response)
       dirty!
     end
+
     # start removing volume from its instance
     def detach! options={}
+      return :wait if detaching? || detached?
       Log.info "Detaching #{self} from #{attached_instance_id}"
       response = Wucluster.ec2.detach_volume options.merge(:volume_id => self.id, :instance_id => self.attached_instance_id, :device => device)
       clear_attachment_info!
       self.update! self.class.attachment_hsh_to_params(response)
       dirty!
     end
+
     # start deleting volume
     def delete! options={}
-      return if existence_status == 'deleting'
+      return :wait if deleting? || deleted?
       Log.info "Deleting #{self}"
       response = Wucluster.ec2.delete_volume options.merge(:volume_id => self.id)
       Log.warn "Request returned funky existence_status: #{response["return"]}" unless (response["return"] == "true")
@@ -144,18 +149,22 @@ module Wucluster
       Wucluster::Ec2Snapshot.find(snapshot_id)
     end
 
+    # List all snapshots for
     def snapshots
       Wucluster::Ec2Snapshot.for_volume(self)
     end
 
+    # List the newest snapshot (regardless of its current
     def newest_snapshot
       snapshots.sort_by(&:created_at).last
     end
 
+    #
     def recently_snapshotted?
       newest_snapshot && newest_snapshot.recent?
     end
 
+    # Fetch current state from remote API
     def refresh!
       clear_attachment_info!
       response = Wucluster.ec2.describe_volumes(:volume_id => id, :owner_id => Settings.aws_account_id)
@@ -163,6 +172,7 @@ module Wucluster
     end
 
   protected
+
     # retrieve info for all volumes from AWS
     def self.each_api_item &block
       response = Wucluster.ec2.describe_volumes(:owner_id => Settings.aws_account_id)
@@ -183,6 +193,7 @@ module Wucluster
       hsh
     end
 
+    # convert params for the attachment segment of aws api responses
     def self.attachment_hsh_to_params attachment_hsh
       return {} unless attachment_hsh
       {
@@ -194,10 +205,12 @@ module Wucluster
       }
     end
 
+    # clear the attachment segment of the internal state
     def clear_attachment_info!
       [:attached_at, :attached_instance_id, :attachment_status].each{|attr| self.send("#{attr}=", nil)}
     end
 
+    # update internal state using a full api response
     def update_from_response! response
       update! self.class.api_hsh_to_params(response.volumeSet.item.first)
     end

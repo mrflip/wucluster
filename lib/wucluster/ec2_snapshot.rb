@@ -21,21 +21,41 @@ module Wucluster
     # [Integer] Size of the volume in GiB
     attr_accessor :size
     # Description of the owning volume
-    attr_accessor :volume_handle
-
-    #
-    def initialize hsh
-      update! hsh
-    end
+    attr_accessor :mount_handle
 
     # ===========================================================================
     #
     # Associations
     #
 
+    # Logical cluster mount info for this snapshot
+    def mount_info
+      return @mount_info if @mount_info
+      return nil if mount_handle.blank?
+      cluster_name, role, node_idx, node_vol_idx, device, mount_point, volume_id, size = mount_handle.split(/\+/)
+      return nil if role.blank?
+      node_idx = node_idx.to_i
+      node_vol_idx = node_vol_idx.to_i
+      size = size.to_i
+      { :cluster_name => cluster_name, :role => role, :node_idx => node_idx, :node_vol_idx => node_vol_idx,
+        :device => device, :mount_point => mount_point, :volume_id => volume_id, :size => size, }
+    end
+    def cluster_name
+      mount_info[:cluster_name]
+    end
+
     # The volume associated with this snapshot
     def volume
       @volume ||= Ec2Volume.find volume_id
+    end
+
+    # Look up snapshot for provided volume
+    def self.for_volume volume
+      all.find_all{|snap| snap.volume_id == volume.id }
+    end
+
+    def self.for_cluster cluster
+      all.find_all{|snap| snap.cluster_name = cluster.name }
     end
 
     # ===========================================================================
@@ -43,20 +63,26 @@ module Wucluster
     # Operations
     #
 
-    # Create
-    #
+    # Create snapshot for given volume with description provided
     def self.create! volume, description
-      Log.info "Creating #{description}."
+      Log.info "Creating snapshot #{description}."
       snap = self.new(:volume_id => volume.id)
       response = Wucluster.ec2.create_snapshot(:volume_id => volume.id, :description => description)
       snap.update! api_hsh_to_params(response)
-      dirty!
+      snap.dirty!
+      register snap
       snap
     end
 
+    # Has the snapshot process completed?
+    def completed?
+      (status == :completed) && (progress == "100%")
+    end
+    def created?() completed? end
+
     # Delete the snapshot on the AWS side
     def delete!
-      Log.info "Deleting #{volume_handle}. O, I die, Horatio."
+      Log.info "Deleting #{mount_handle}. O, I die, Horatio."
       # Wucluster.ec2.delete_snapshot(:snapshot_id => id)
     end
 
@@ -73,16 +99,14 @@ module Wucluster
 
     # Is the snapshot recent enough to not warrant re-snapshotting?
     def recent?
-      age < RECENT_SNAPSHOT_AGE
+      refresh!
+      completed? && (age < RECENT_SNAPSHOT_AGE)
     end
 
-    # Has the snapshot process completed?
-    def completed?
-      (status == :completed) && (progress == "100%")
-    end
-
-    def self.for_volume volume
-      all.find_all{|snap| snap.volume_id == volume.id }
+    # Fetch current state from remote API
+    def refresh!
+      response = Wucluster.ec2.describe_snapshots(:snapshot_id => id)
+      update! response.snapshotSet.item.first
     end
 
   protected
@@ -104,7 +128,7 @@ module Wucluster
         :progress      => api_hsh['progress'],
         :owner_id      => api_hsh['ownerId'],
         :size          => api_hsh['volumeSize'].to_i,
-        :volume_handle => api_hsh['description'],
+        :mount_handle  => api_hsh['description'],
       }
       hsh[:created_at] = api_hsh[ 'startTime']
       hsh
