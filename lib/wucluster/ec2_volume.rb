@@ -53,12 +53,16 @@ module Wucluster
       when :available
         case attachment_status
         when nil, :detached      then :detached
+        when :detaching          then :detaching
         when :attaching          then :attaching
+        when :busy               then :busy
         else                     raise UnexpectedState, "#{existence_status} - #{attachment_status}" end
       when :in_use
         case attachment_status
         when :attached           then :attached
         when :detaching          then :detaching
+        when :attaching          then :attaching
+        when :busy               then :busy
         else                     raise UnexpectedState, "#{existence_status} - #{attachment_status}" end
       when :deleting             then :deleting
       end
@@ -71,6 +75,7 @@ module Wucluster
     def attaching?() status == :attaching end
     def attached?()  status == :attached  end
     def detaching?() status == :detaching end
+    def busy?()      status == :busy      end
     def error?()     status == :error     end
     def mounted?()   attached? && (mounted_status == :mounted) end
 
@@ -130,17 +135,6 @@ module Wucluster
     end
 
     #
-    # Mounting
-    #
-
-    def mounted_status
-      false
-    end
-    def mount!
-      raise "Can't mount yet"
-    end
-
-    #
     # Snapshots
     #
 
@@ -161,14 +155,25 @@ module Wucluster
 
     #
     def recently_snapshotted?
-      newest_snapshot && newest_snapshot.recent?
+      newest_snapshot && newest_snapshot.recent? && newest_snapshot.completed?
     end
+
+    def snapshotting?
+      newest_snapshot && (not newest_snapshot.completed?)
+    end
+
 
     # Fetch current state from remote API
     def refresh!
       clear_attachment_info!
       response = Wucluster.ec2.describe_volumes(:volume_id => id, :owner_id => Settings.aws_account_id)
       update! self.class.api_hsh_to_params(response.volumeSet.item.first)
+    end
+
+    # update internal state using a full api response
+    def update! *args
+      clear_attachment_info!
+      super(*args)
     end
 
   protected
@@ -198,7 +203,7 @@ module Wucluster
       return {} unless attachment_hsh
       {
         :attached_at             => Time.parse(attachment_hsh['attachTime']),
-        :device       => attachment_hsh['device'],
+        :device                  => attachment_hsh['device'],
         :deletes_on_termination  => attachment_hsh['deleteOnTermination'],
         :attached_instance_id    => attachment_hsh['instanceId'],
         :attachment_status       => attachment_hsh['status'].to_sym,
@@ -208,11 +213,6 @@ module Wucluster
     # clear the attachment segment of the internal state
     def clear_attachment_info!
       [:attached_at, :attached_instance_id, :attachment_status].each{|attr| self.send("#{attr}=", nil)}
-    end
-
-    # update internal state using a full api response
-    def update_from_response! response
-      update! self.class.api_hsh_to_params(response.volumeSet.item.first)
     end
   end
 end

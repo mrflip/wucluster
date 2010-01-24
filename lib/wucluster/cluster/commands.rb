@@ -29,6 +29,11 @@ module Wucluster
       nodes.all?(&:terminated?) && mounts.all?(&:terminated?)
     end
 
+    def refresh!
+      [Ec2Keypair, Ec2SecurityGroup, Ec2Volume, Ec2Instance
+      ].each{|klass| klass.load_all! }
+    end
+
     # ===========================================================================
     #
     # Sub-operations
@@ -38,9 +43,9 @@ module Wucluster
     # instantiate the cluster by ensuring all nodes and all mounts are instantiated
     def create!
       repeat_until :created? do
-        nodes.each(&:create!)
-        mounts.each(&:create!)
-        Log.info "Instantiating #{self}"
+        results =  nodes.map(&:create!)
+        results += mounts.map(&:create!)
+        Log.info "Instantiating #{self}: #{results.inspect}"
       end
     end
     # are all the nodes and mounts created?
@@ -50,8 +55,8 @@ module Wucluster
 
     def attach!
       repeat_until :attached? do
-        Log.info "Attaching #{self}"
-        mounts.each(&:attach!)
+        results = mounts.map(&:attach!)
+        Log.info "Attaching #{self}: #{results.inspect}"
       end
     end
     # are all mounts attached to their nodes?
@@ -63,8 +68,8 @@ module Wucluster
     # their node.
     def mount!
       repeat_until :mounted? do
-        Log.info "Mounting #{self}"
-        mounts.each(&:mount!)
+        results = mounts.map(&:mount!)
+        Log.info "Mounting #{self}: #{results.inspect}"
       end
     end
     # are all mounts attached to their nodes?
@@ -76,8 +81,8 @@ module Wucluster
     # their node.
     def unmount!
       repeat_until :unmounted? do
-        Log.info "Unmounting #{self}"
-        mounts.each(&:unmount!)
+        results = mounts.map(&:unmount!)
+        Log.info "Unmounting #{self}: #{results.inspect}"
       end
     end
     # All mounts are unmounted on their nodes
@@ -88,8 +93,8 @@ module Wucluster
     # Ask each mount to separate from its node
     def separate!
       repeat_until :separated? do
-        Log.info "Separating #{self}"
-        mounts.each(&:separate!)
+        results = mounts.map(&:separate!)
+        Log.info "Separating #{self} #{results.inspect}"
       end
     end
     # are all mounts separated from their nodes?
@@ -101,26 +106,27 @@ module Wucluster
     # to make it recoverable
     def snapshot!
       repeat_until :recently_snapshotted? do
-        Log.info "Snapshotting #{self}"
-        mounts.each(&:snapshot!)
+        results = mounts.map(&:snapshot!)
+        Log.info "Snapshotting #{self}: #{results.inspect} - #{mounts.map{|mount| (not mount.created?) || mount.recently_snapshotted? }.inspect}"
       end
     end
     # have all mounts been recently snapshotted?
     def recently_snapshotted?
-      mounts.all?(&:recently_snapshotted?)
+      mounts.all?{|mount| (not mount.created?) || mount.recently_snapshotted? }
     end
 
     # Ask each mount to delete its volume
     def delete!
       repeat_until :deleted? do
-        mounts.each(&:delete!)
-        nodes.each( &:delete!)
-        Log.info "Deleting #{self}"
+        results =  mounts.map(&:delete!)
+        results += nodes.map( &:delete!)
+        Log.info "Deleting #{self}: #{results.inspect}"
       end
     end
     # have all mounts been deleted?
     def deleted?
-      mounts.all?(&:deleted?) && nodes.all?(&:deleted?)
+      mounts.all?{|mount| mount.deleted? || mount.deleting? } &&
+        nodes.all?(&:deleted?)
     end
 
   protected
@@ -137,6 +143,7 @@ module Wucluster
         yield
         break if self.send(test)
         sleep Settings.sleep_time
+        refresh!
       end
     end
   end

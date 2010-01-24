@@ -83,31 +83,13 @@ module Wucluster
         Mount.new(self, role, node_idx, node_vol_idx, mount_cfg[:device], mount_cfg[:mount_point], mount_cfg[:size], mount_cfg[:volume_id])
     end
 
-    # # Turn the cluster_role_node_mount_tree into a flat list of mounts,
-    # # an hash indexed by [role,node_idx,node_vol_idx]
-    # # interface to cluster definition from cloudera config files
-    # def load_from_cloudera_file!
-    #   @all_mounts = {}
-    #   @all_nodes  = {}
-    #   cluster_role_node_mount_tree.each do |role, cluster_node_mounts|
-    #     role = role
-    #     cluster_node_mounts.each_with_index do |mounts, node_idx|
-    #       image_id = 'ami-0b02e162' ; instance_type = 'm1.small'
-    #       @all_nodes[ [role, node_idx] ] = Node.new self, role, node_idx, image_id, instance_type
-    #       mounts.each_with_index do |mount, node_vol_idx|
-    #         @all_mounts[[role, node_idx, node_vol_idx]] =
-    #           Mount.new(self, role, node_idx, node_vol_idx, mount['device'], mount['mount_point'], mount['volume_id'])
-    #       end
-    #     end
-    #   end
-    #   @all_mounts
-    # end
+    def catalog_existing
+      Ec2Volume.all
+      # @all_mounts[[role, node_idx, node_vol_idx]] =
+      #   Mount.new(cluster, role, node_idx, node_vol_idx, vol.device, vol.mount_point, vol.size, vol.id)
+    end
 
   protected
-    # # The raw cluster_role_node_volume_tree from the cloudera EC2 cluster file
-    # def cluster_definition_from_cloudera_file
-    #   JSON.load(File.open(Settings.cluster_definition_dir + "/ec2-storage-#{name}.json"))
-    # end
 
     def cluster_definition_from_config
       Settings.clusters[name]
@@ -115,3 +97,30 @@ module Wucluster
 
   end
 end
+
+# protected
+#
+# # Turn the cluster_role_node_mount_tree into a flat list of mounts,
+# # an hash indexed by [role,node_idx,node_vol_idx]
+# # interface to cluster definition from cloudera config files
+# def load_from_cloudera_file!
+#   @all_mounts = {}
+#   @all_nodes  = {}
+#   cluster_role_node_mount_tree.each do |role, cluster_node_mounts|
+#     role = role
+#     cluster_node_mounts.each_with_index do |mounts, node_idx|
+#       image_id = 'ami-0b02e162' ; instance_type = 'm1.small'
+#       @all_nodes[ [role, node_idx] ] = Node.new self, role, node_idx, image_id, instance_type
+#       mounts.each_with_index do |mount, node_vol_idx|
+#         @all_mounts[[role, node_idx, node_vol_idx]] =
+#           Mount.new(self, role, node_idx, node_vol_idx, mount['device'], mount['mount_point'], mount['volume_id'])
+#       end
+#     end
+#   end
+#   @all_mounts
+# end
+#
+# # The raw cluster_role_node_volume_tree from the cloudera EC2 cluster file
+# def cluster_definition_from_cloudera_file
+#   JSON.load(File.open(Settings.cluster_definition_dir + "/ec2-storage-#{name}.json"))
+# end

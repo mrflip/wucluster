@@ -58,6 +58,9 @@ module Wucluster
     def error?
       volume && volume.error?
     end
+    def busy?
+      volume && volume.busy?
+    end
 
     def refresh!
       return self unless volume
@@ -87,6 +90,7 @@ module Wucluster
           :device            => device
           )
       when volume.creating?  then :wait
+      when volume.busy?      then :wait
       when volume.error?     then :error
       else raise UnexpectedState, volume.status.to_s
       end
@@ -106,6 +110,7 @@ module Wucluster
       when :detached   then volume.attach!(node.instance, device) ; :wait
       when :attaching  then :wait
       when :detaching  then :wait
+      when :busy       then :wait
       when :error      then :error
       else raise UnexpectedState, volume.status.to_s
       end
@@ -114,29 +119,41 @@ module Wucluster
       volume && volume.attached?
     end
 
+    attr_reader :mounted_status
+
     def mount!
       return true    if mounted?
       unless attached? then attach! ; return :wait ; end
       case
+      when volume.busy?     then :wait
       when volume.error?    then :error
-      when volume.attached? then node.mount(self)
-      else raise UnexpectedState, "#{volume.status} - #{volume.mounted_status}"
+      when volume.attached?
+        Log.info "Mounting #{self}"
+        # node.mount(self)
+        warn "Can't 'mount #{device} #{mount_point}' yet"
+        @mounted_status = true
+      else raise UnexpectedState, "#{volume.status} - #{mounted_status}"
       end
     end
     def mounted?
-      volume && volume.mounted?
+      volume && @mounted_status
     end
 
     def unmount!
       return true    if unmounted?
       case
+      when volume.busy?     then :wait
       when volume.error?    then :error
-      when volume.mounted? then node.unmount(volume, mount_point)
-      else raise UnexpectedState, "#{volume.status} - #{volume.mounted_status}"
+      when mounted?
+        Log.info "Unmounting #{self}"
+        # node.unmount(volume, mount_point)
+        warn "Can't 'mount #{device} #{mount_point}' yet"
+        @mounted_status = false
+      else raise UnexpectedState, "#{volume.status} - #{mounted_status}"
       end
     end
     def unmounted?
-      (not mounted?) && (not error?)
+      (not mounted?) && (not error?) && (not busy?)
     end
 
     def separate!
@@ -146,6 +163,7 @@ module Wucluster
       when volume.attached?  then volume.detach!
       when volume.detaching? then :wait
       when volume.attaching? then :wait
+      when volume.busy?      then :wait
       when volume.error?     then :error
       else raise UnexpectedState, volume.status.to_s
       end
@@ -156,17 +174,14 @@ module Wucluster
 
     def snapshot!
       case
-      when recently_snapshotted?  then true
       when (not created?)         then true
       when volume.snapshotting?   then :wait
-      when created? && separated? then volume.snapshot!
+      when volume.recently_snapshotted? then true
+      when created? && separated? then
+        Wucluster::Ec2Snapshot.create! volume, handle
       when (not separated?)       then separate! ; :wait
       else raise UnexpectedState, volume.status.to_s
       end
-    end
-
-    def recently_snapshotted?
-      volume.recently_snapshotted?
     end
 
     def delete!
@@ -177,12 +192,16 @@ module Wucluster
       when volume.detached?             then volume.delete!
       when volume.deleting?             then :wait
       when volume.creating?             then :wait
+      when volume.busy?                 then :wait
       when volume.error?                then :error
       else raise UnexpectedState, volume.status.to_s
       end
     end
     def deleted?
       volume.nil? || volume.deleted?
+    end
+    def deleting?
+      volume && volume.deleting?
     end
 
     #
@@ -195,36 +214,14 @@ module Wucluster
     #
     # Snapshot
     #
-
-    def snapshot!
-      return unless volume
-      Log.info "Creating snapshot for #{self} as #{handle}"
-      Wucluster::Ec2Snapshot.create! volume, handle
-    end
-    def newest_snapshot()
-      volume && volume.newest_snapshot
-    end
-    def recently_snapshotted?
-      volume && volume.recently_snapshotted?
-    end
     # List Associated Snapshots
     def snapshots
       Wucluster::Ec2Snapshot.for_volume volume
     end
 
+    def recently_snapshotted?
+      volume && volume.recently_snapshotted?
+    end
+
   end
 end
-
-
-
-    # def delete_old_snapshots
-    #   # order by date
-    #   old_snapshots = snapshots.sort_by(&:created_at)
-    #   old_snapshots = old_snapshots.find_all{|snapshot| snapshot.to_s == "completed"}
-    #   # remove the last
-    #   newest = old_snapshots.pop
-    #   Log.info "Keeping  #{newest.description}" if newest
-    #   old_snapshots.each do |snapshot|
-    #     snapshot.delete!
-    #   end
-    # end

@@ -15,10 +15,10 @@ module Wucluster
     # Operations
     #
 
+    # return the keypair if it exists, create it otherwise
     def self.exist! id
       find(id.to_s) || create!(id.to_s)
     end
-
 
     # start deleting volume
     def delete! options={}
@@ -62,7 +62,6 @@ module Wucluster
       Log.info "Creating #{self} #{id}"
       kp = self.new(:id => id)
       response = Wucluster.ec2.create_keypair(:key_name => id.to_s)
-      p response
       kp.update! api_hsh_to_params(response)
       kp.dirty!
       kp

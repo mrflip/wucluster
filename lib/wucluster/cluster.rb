@@ -22,6 +22,16 @@ module Wucluster
       self.availability_zone = availability_zone || Settings.aws_availability_zone
     end
 
+    def self.new name, *args
+      listing[name.to_sym] ||= super(name, *args)
+    end
+    def self.listing
+      @listing ||= {}
+    end
+    def self.find name
+      listing[name.to_sym]
+    end
+
     def roles
       all_nodes.keys.map(&:first).uniq
     end
@@ -34,7 +44,7 @@ module Wucluster
     end
 
     def to_s
-      %Q{<##{self.class} #{self.name} nodes: #{roles_count.inspect} #{mounts.length} mounts>}
+      %Q{#<#{self.class} #{self.name} nodes: #{roles_count.inspect} #{mounts.length} mounts>}
     end
   end
 end

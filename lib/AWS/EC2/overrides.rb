@@ -16,17 +16,6 @@ module AWS
         return response_generator(:action => "CreateSnapshot", :params => params)
       end
 
-      # The DescribeSnapshots operation describes the status of Amazon EBS snapshots.
-      #
-      # @option options [Array] :snapshot_id ([])
-      #
-      def describe_snapshots( options = {} )
-        options = { :snapshot_id => [] }.merge(options)
-        params = pathlist("SnapshotId", options[:snapshot_id] )
-        params.merge!( "Owner" => options[:owner_id] ) unless options[:owner_id].nil?
-        return response_generator(:action => "DescribeSnapshots", :params => params)
-      end
-
     end
   end
 end

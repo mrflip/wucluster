@@ -15,13 +15,18 @@ module Wucluster
     # Operations
     #
 
+    # return the security_group if it exists, create it otherwise
+    def self.exist! id, description
+      find(id.to_s) || create!(id.to_s, description)
+    end
+
     # Create snapshot for given volume with description provided
     def self.create! id, description
       Log.info "Creating security_group #{id} (#{description})."
       sg = self.new(:id => id, :description => description)
       response = Wucluster.ec2.create_security_group(:group_name => id, :group_description => description)
       sg.update! api_hsh_to_params(response)
-      dirty!
+      sg.dirty!
       sg
     end
 
@@ -55,7 +60,6 @@ module Wucluster
     #       {"groups"=>nil, "fromPort"=>"22", "toPort"=>"22", "ipRanges"=>{"item"=>[{"cidrIp"=>"0.0.0.0/0"}]}, "ipProtocol"=>"tcp"},
     #     ]},}
     def self.api_hsh_to_params api_hsh
-      p api_hsh
       hsh = {
         :id            => api_hsh['groupName'],
         :description   => api_hsh['groupDescription'],

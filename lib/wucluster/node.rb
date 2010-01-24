@@ -22,6 +22,15 @@ module Wucluster
       self.instance_id    = instance_id
     end
 
+    def self.from_instance instance
+      clname, clname_role, clname_role_idx = instance.security_groups.sort
+      clname_role_idx ||= 'bonobo-slave-000'
+      # check that the security group labels are correct
+      cluster_name, role, idx = clname_role_idx.split('-')
+      return nil unless (role && idx && clname == cluster_name && clname_role == "#{cluster_name}-#{role}" )
+      self.new Cluster.find(cluster_name), role, idx, instance.image_id, instance.instance_type, instance.id
+    end
+
     def to_s
       %Q{#<#{self.class} #{cluster.name}-#{role}-#{"%03d"%node_idx} #{instance_id} #{instance_type} #{image_id} #{status}>}
     end
@@ -65,7 +74,7 @@ module Wucluster
     #   cluster = Cluster.new :bonobo
     #   Node.new cluster, :master, 0,
     def security_groups
-      [cluster.name.to_s, "#{cluster.name.to_s}-#{role}"]
+      [cluster.name.to_s, "#{cluster.name}-#{role}", "#{cluster.name}-#{role}-#{"%03d"%node_idx}"]
     end
 
     # The name of the AWS key pair, used for remote access to instance
@@ -76,13 +85,15 @@ module Wucluster
     def run!
       case
       when instance.nil? || instance.terminated?
-      Wucluster::Ec2Instance.create!({
-          :image_id          => image_id,
-          :key_name          => key_name,
-          :security_groups   => security_groups,
-          :availability_zone => availability_zone,
-          :instance_type     => instance_type,
-        })
+        Ec2Keypair.exist! key_name
+        security_groups.each{|sg| Ec2SecurityGroup.exist! sg, "Label for #{cluster.name} #{role} node ##{"%03d"%node_idx}" }
+        self.instance = Wucluster::Ec2Instance.create!({
+            :image_id          => image_id,
+            :key_name          => key_name,
+            :security_groups   => security_groups,
+            :availability_zone => availability_zone,
+            :instance_type     => instance_type,
+          })
       when instance.running?        then true
       when instance.pending?        then :wait
       when instance.shutting_down?  then :wait
@@ -104,7 +115,14 @@ module Wucluster
 
     # Terminate the instance.
     def terminate!
-      Log.info "Terminating #{self}"
+      case
+      when terminated?              then true
+      when running?                 then instance.terminate!
+      when instance.shutting_down?  then :wait
+      when instance.pending?        then :wait
+      when instance.error?          then :error
+      else raise UnexpectedState, volume.status.to_s
+      end
     end
 
     def terminated?
@@ -117,11 +135,6 @@ module Wucluster
     end
     def deleted?
       terminated?
-    end
-
-
-    def mount mnt
-      warn "Can't 'mount #{mnt.device} #{mnt.mount_point}' yet"
     end
 
   end

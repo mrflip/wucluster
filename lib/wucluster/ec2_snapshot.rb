@@ -4,7 +4,7 @@ module Wucluster
   #
   class Ec2Snapshot
     include Ec2Proxy
-    ::Settings.describe :recent_snapshot_age, :default => (12*60*60), :description => "Time window for figuring if a snapshot is recent"
+    ::Settings.define :recent_snapshot_age, :default => (12*60*60), :description => "Time window for figuring if a snapshot is recent"
 
     # Snapshot AWS id
     attr_accessor :id
@@ -51,6 +51,7 @@ module Wucluster
 
     # Look up snapshot for provided volume
     def self.for_volume volume
+      return [] unless volume
       all.find_all{|snap| snap.volume_id == volume.id }
     end
 
@@ -76,7 +77,7 @@ module Wucluster
 
     # Has the snapshot process completed?
     def completed?
-      (status == :completed) && (progress == "100%")
+      (status.to_s == 'completed') && (progress == "100%")
     end
     def created?() completed? end
 
@@ -100,13 +101,20 @@ module Wucluster
     # Is the snapshot recent enough to not warrant re-snapshotting?
     def recent?
       refresh!
-      completed? && (age < RECENT_SNAPSHOT_AGE)
+      age < Settings.recent_snapshot_age
     end
 
     # Fetch current state from remote API
     def refresh!
-      response = Wucluster.ec2.describe_snapshots(:snapshot_id => id)
-      update! response.snapshotSet.item.first
+      begin response = Wucluster.ec2.describe_snapshots(:snapshot_id => id)
+      rescue AWS::Error => e
+        if e.to_s =~ /snapshot .* does not exist/
+          self.status = :deleted
+          self.volume_id = self.progress = self.size = self.owner_id = nil
+          return nil
+        else raise e end
+      end
+      update! self.class.api_hsh_to_params(response.snapshotSet.item.first)
     end
 
   protected

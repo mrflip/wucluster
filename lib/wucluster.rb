@@ -2,6 +2,7 @@ $: << File.dirname(__FILE__)
 require 'logger'
 require 'configliere'; Configliere.use :define, :config_file, :config_block
 require 'AWS'
+require 'AWS/EC2/overrides'
 require 'json'
 require 'wucluster/exceptions'
 Log = Logger.new $stderr unless defined?(Log)

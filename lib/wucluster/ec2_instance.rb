@@ -28,6 +28,7 @@ module Wucluster
     def running?()       status == :running        end
     def terminated?()    status == :terminated     end
     def shutting_down?() status == :shutting_down  end
+    def terminating?()   shutting_down?  end
 
     def to_hash
       %w[id status key_name security_groups availability_zone instance_type public_ip private_ip created_at image_id
@@ -67,12 +68,10 @@ module Wucluster
     def run! options={}
       return :wait if pending? || running?
       Log.info "Running #{self}"
-      Ec2Keypair.exist! key_name
       response = Wucluster.ec2.run_instances options.merge(:image_id => image_id,
-        :key_name => key_name, :security_groups => security_groups, :availability_zone => availability_zone,
+        :key_name => key_name, :security_group => security_groups, :availability_zone => availability_zone,
         :instance_type => instance_type)
       update! self.class.api_hsh_to_params(response)
-      p [self, response]
       self.class.register self
       undirty!
     end
@@ -87,10 +86,11 @@ module Wucluster
     # The TerminateInstances operation shuts down one or more instances.
     def terminate! options={}
       return :wait if terminating? || terminated?
-      Log.info "Running #{self}"
+      Log.info "Terminating #{self}"
       response = Wucluster.ec2.terminate_instances options.merge(:instance_id => [self.id])
       new_state = response.instancesSet.item.first.currentState.name rescue nil
       Log.warn "Request returned funky status: #{new_state}" unless (['shutting-down', 'terminated'].include? new_state)
+      self.status = new_state.gsub(/-/,'_').to_sym
       dirty!
       response
     end
@@ -103,13 +103,11 @@ module Wucluster
     # retrieve info for all volumes from AWS
     def self.each_api_item &block
       response = Wucluster.ec2.describe_instances
-      p [response, response.reservationSet.item]
       response.reservationSet.item.each(&block)
     end
 
     def refresh!
       response = Wucluster.ec2.describe_instances(:instance_id => id)
-      p [response, response.reservationSet.item]
       update! self.class.api_hsh_to_params(response.reservationSet.item.first)
     end
 
