@@ -38,7 +38,8 @@ module Wucluster
       node_vol_idx = node_vol_idx.to_i
       size = size.to_i
       { :cluster_name => cluster_name, :role => role, :node_idx => node_idx, :node_vol_idx => node_vol_idx,
-        :device => device, :mount_point => mount_point, :volume_id => volume_id, :size => size, }
+        :device => device, :mount_point => mount_point, :volume_id => volume_id, :size => size,
+        :from_snapshot_id => id, :snapshotted_at => created_at }
     end
     def cluster_name
       mount_info[:cluster_name]

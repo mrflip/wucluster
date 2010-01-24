@@ -48,9 +48,9 @@ module Wucluster
     # an hash indexed by [role,node_idx,node_vol_idx]
     # interface to cluster definition from cloudera config files
     def load!
+      cluster_cfg = cluster_definition_from_config or return
       @all_mounts = {}
       @all_nodes  = {}
-      cluster_cfg = cluster_definition_from_config
       load_attrs_from_cfg cluster_cfg
       cluster_cfg[:nodes].each do |role, nodes_for_role|
         role = role.to_s
@@ -83,10 +83,35 @@ module Wucluster
         Mount.new(self, role, node_idx, node_vol_idx, mount_cfg[:device], mount_cfg[:mount_point], mount_cfg[:size], mount_cfg[:volume_id])
     end
 
+    def catalog_existing_snapshots
+      return unless @all_nodes
+      mount_infos = Ec2Snapshot.all.sort_by(&:created_at).map(&:mount_info).compact
+      snapshots_for_mounts = { }
+      mount_infos.each do |mnt_info|
+        next unless mnt_info[:cluster_name].to_s == name.to_s
+        snapshots_for_mounts[ [mnt_info[:role], mnt_info[:node_idx], mnt_info[:node_vol_idx] ] ] = mnt_info
+      end
+      snapshots_for_mounts.each do |mnt_id, mnt_info|
+        mount = @all_mounts[mnt_id] or next
+        next if mount.created? || mount.creating?
+        mount.from_snapshot_id = mnt_info[:from_snapshot_id]
+      end
+    end
+
+    def catalog_existing_instances
+      return unless @all_nodes
+      cluster_instances = Ec2Instance.all.find_all{|inst| inst.security_groups.include?(name.to_s)}
+      cluster_instances.map do |inst|
+        next if inst.deleted? || inst.deleting?
+        cluster, role, node_idx, *_ = Wucluster::Node.params_from_instance(inst)
+        node = @all_nodes[ [role, node_idx] ] or next
+        node.update_from_instance! inst
+      end
+    end
+
     def catalog_existing
-      Ec2Volume.all
-      # @all_mounts[[role, node_idx, node_vol_idx]] =
-      #   Mount.new(cluster, role, node_idx, node_vol_idx, vol.device, vol.mount_point, vol.size, vol.id)
+      most_recent_snapshots = catalog_existing_snapshots
+      [recent_snapshots]
     end
 
   protected

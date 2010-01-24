@@ -22,13 +22,23 @@ module Wucluster
       self.instance_id    = instance_id
     end
 
-    def self.from_instance instance
+    def self.params_from_instance instance
       clname, clname_role, clname_role_idx = instance.security_groups.sort
-      clname_role_idx ||= 'bonobo-slave-000'
       # check that the security group labels are correct
       cluster_name, role, idx = clname_role_idx.split('-')
       return nil unless (role && idx && clname == cluster_name && clname_role == "#{cluster_name}-#{role}" )
-      self.new Cluster.find(cluster_name), role, idx, instance.image_id, instance.instance_type, instance.id
+      [ Cluster.find(cluster_name), role, idx.to_i, instance.image_id, instance.instance_type, instance.id ]
+    end
+
+    def self.from_instance instance
+      params = params_from_instance(instance) or return
+      new( *params )
+    end
+
+    def update_from_instance! instance
+      params = self.class.params_from_instance(instance) or return
+      self.cluster, self.role, self.node_idx, self.image_id, \
+        self.instance_type, self.instance_id = params
     end
 
     def to_s
@@ -135,6 +145,9 @@ module Wucluster
     end
     def deleted?
       terminated?
+    end
+    def deleting?
+      instance && instance.deleting?
     end
 
   end

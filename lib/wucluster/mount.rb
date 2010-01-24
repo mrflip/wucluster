@@ -25,7 +25,7 @@ module Wucluster
     end
 
     def to_s
-      %Q{#<#{self.class} #{cluster.name}-#{role}-#{"%03d"%node_idx}-#{"%03d"%node_vol_idx} #{volume_id} #{size}GB #{device}~#{mount_point} #{status}>}
+      %Q{#<#{self.class} #{cluster.name}-#{role}-#{"%03d"%node_idx}-#{"%03d"%node_vol_idx} #{volume_id} #{size}GB #{device}~#{mount_point} #{from_snapshot_id} ##{status}>}
     end
     def inspect
       to_s
@@ -97,6 +97,9 @@ module Wucluster
     end
     def created?
       volume && volume.created?
+    end
+    def creating?
+      volume && volume.creating?
     end
 
     def attach!

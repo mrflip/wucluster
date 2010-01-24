@@ -27,8 +27,10 @@ module Wucluster
     def pending?()       status == :pending        end
     def running?()       status == :running        end
     def terminated?()    status == :terminated     end
+    def deleted?()        terminated?  end
     def shutting_down?() status == :shutting_down  end
     def terminating?()   shutting_down?  end
+    def deleting?()      shutting_down?  end
 
     def to_hash
       %w[id status key_name security_groups availability_zone instance_type public_ip private_ip created_at image_id
