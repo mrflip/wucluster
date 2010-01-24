@@ -15,7 +15,7 @@ h3. Cluster States
 Behing the scenes, wucluster will walk the nodes and mounts through the correct progression of states. The defined states of a cluster are, from birth to death:
 
 * *instantiated*: all nodes are running and all mounts exist.
-* *attached*: _instantiated_, and all mounts are attached to their nodes. 
+* *attached*: _instantiated_, and all mounts are attached to their nodes.
 * *mounted*: _attached_, and all mounts are mounted within their node.
 * *launched*: cluster is a fully armed and operational battlestation. Right now, same as _mounted_ -- but it's possible other assertions could be added.
 * *unmounted*: no mount is mounted. Note that this doesn't mean anything is running or exists or whatever; just that _if_ a mount is attached that mount is _not_ mounted.
@@ -25,6 +25,60 @@ Behing the scenes, wucluster will walk the nodes and mounts through the correct 
 * *terminated*: no nodes are running and no mounts exist.
 
 A cluster doesn't have to be in one of those states: an operation might have failed, leaving some nodes attached and others detached. Or you could add three more nodes and mounts to a running cluster, in which case most of the nodes+mounts are launched while three are still terminated.
+
+h2. Cluster Definition
+
+<pre>
+    # Amazon AWS credentials
+    :aws_access_key_id:     20CHARACTERALPHANUMS
+    :aws_secret_access_key: strigof/gob+bledygookWithUPPERlowerand12
+    :aws_account_id:        123456789012
+    :aws_availability_zone: us-east-1d
+    # will look in private_key_dir/cluster_name.pem for ssh key
+    :private_key_dir:       %(home)s/.hadoop-ec2
+    :ssh_options:           -i %(private_key)s -o StrictHostKeyChecking=no
+
+    # parameters for remote connection attempts
+    :max_tries:             15
+    :sleep_time:            1.0
+
+    # define the actual clusters
+    :clusters:
+      :spiders:
+        :availability_zone: us-east-1d
+        :image_id:          ami-0b02e162
+        :instance_type:     m1.small
+        # runs the queues, etc so it's a medium instance
+        :main:
+          :image_id:        ami-0b02e162
+          :instance_type:   m1.medium
+          :mounts:
+            - { :device: "/dev/sdd", :mount_point: '/data',   :size: 200,  :volume_id: "vol-c8675309" }
+            - { :device: "/dev/sdf", :mount_point: '/data2',  :size: 200,  :volume_id: "vol-aaa24601" }
+            - { :device: "/dev/sdg", :mount_point: '/data3',  :size: 1000, :volume_id: "vol-deadbeef" }
+        # remaining scraper nodes are all default, have no mounts
+        :s1:
+        :s2:
+        :s3:
+
+      :bonobo:
+        :availability_zone: us-east-1d
+        :image_id:          ami-0b02e162
+        :instance_type:     m1.small
+        :nodes:
+          :master:
+            - :mounts:
+                - { :device: "/dev/sdh", :mount_point: "/mnt/home", :size: 10, :volume_id: "vol-d5d826bc" }
+                - { :device: "/dev/sdj", :mount_point: "/ebs1",     :size: 1 }
+                - { :device: "/dev/sdk", :mount_point: "/ebs2",     :size: 1 }
+          :slave:
+            - :image_id:                  ami-0b02e162
+              :instance_type:             m1.small
+              :mounts:
+                - { :device: "/dev/sdj", :mount_point: "/ebs1",     :size: 1 }
+                - { :device: "/dev/sdk", :mount_point: "/ebs2",     :size: 1 }
+</pre>
+
 
 h2. Design
 
@@ -40,7 +94,7 @@ h3. AWS Facade
 
 Wucluster tries to be efficient in the general case with its API requests. It caches results where appropriate; and in general tries to use single requests returning info on all volumes/instances/snapshot rather than individual requests per volume/instance/snapshot.
 
-A volume's low-level state: 
+A volume's low-level state:
 * existence:  (absent), creating, available, in-use, deleting, deleted, error (via AWS api)
 * attachment: attaching, attached, detaching, detached, error (via AWS api)
 * filesystem: mounted, unmounted, error (via SSH'ing to node)
@@ -49,7 +103,7 @@ An instance can be:
 * pending, running, shutting-down, terminated, stopping, stopped (via AWS api)
 
 A snapshot can be:
-* 
+*
 
 
 h2. Workflow
@@ -99,7 +153,7 @@ terminate:
 detach
 
 
- 
+
 h3. principles
 
 Wucluster operations are
