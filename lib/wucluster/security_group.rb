@@ -2,7 +2,7 @@ module Wucluster
   #
   # Facade for an EBS Snapshot
   #
-  class Ec2SecurityGroup
+  class SecurityGroup
     include Ec2Proxy
 
     # security group name
@@ -49,7 +49,7 @@ module Wucluster
     end
 
     #
-    # Use the hash sent back from AWS to construct an Ec2SecurityGroup instance
+    # Use the hash sent back from AWS to construct an SecurityGroup instance
     #
     # @example
     #   # response

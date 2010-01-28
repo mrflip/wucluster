@@ -1,8 +1,8 @@
 require File.expand_path(File.dirname(__FILE__) + '/../spec_helper')
 
-describe 'Wucluster::Ec2Volume' do
+describe 'Wucluster::Volume' do
   it 'creates' do
-    volume = Wucluster::Ec2Volume.new()
+    volume = Wucluster::Volume.new()
   end
 
   # imperatives:  attach!, detach!, instantiate!, delete!
@@ -11,7 +11,7 @@ describe 'Wucluster::Ec2Volume' do
 
   describe 'with state' do
     before do
-      @volume   = Wucluster::MockEc2Volume.new('vol_0')
+      @volume   = Wucluster::MockVolume.new('vol_0')
       @instance = mock 'mock_instance'
     end
     it 'is     instantiated when its status is available and attached or attaching' do

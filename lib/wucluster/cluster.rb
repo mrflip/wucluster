@@ -17,6 +17,14 @@ module Wucluster
     # default instance type for cluster nodes
     attr_accessor :instance_type
 
+
+    # cluster_graph = [
+    #   [:launched?,        [:mounts_launched?, :nodes_launched?], nil],
+    #   [:nodes_launched?,  nil, :launch_nodes!],
+    #   [:mounts_launched?, nil, :launch_mounts!],
+    # ]
+    #
+
     def initialize name, availability_zone = nil
       self.name              = name.to_sym
       self.availability_zone = availability_zone || Settings.aws_availability_zone

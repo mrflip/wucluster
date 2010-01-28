@@ -58,12 +58,12 @@ module Wucluster
     end
 
     def instance
-      Wucluster::Ec2Instance.find instance_id
+      Wucluster::Instance.find instance_id
     end
 
-    def instance=(ec2_instance)
-      Log.info "Setting instance to #{ec2_instance} from #{@instance_id}"
-      @instance_id = ec2_instance ? ec2_instance.id : nil
+    def instance=(instance)
+      Log.info "Setting instance to #{instance} from #{@instance_id}"
+      @instance_id = instance ? instance.id : nil
     end
 
     # Placement constraints (Availability Zones) for launching the instances.
@@ -95,9 +95,9 @@ module Wucluster
     def run!
       case
       when instance.nil? || instance.terminated?
-        Ec2Keypair.exist! key_name
-        security_groups.each{|sg| Ec2SecurityGroup.exist! sg, "Label for #{cluster.name} #{role} node ##{"%03d"%node_idx}" }
-        self.instance = Wucluster::Ec2Instance.create!({
+        Keypair.exist! key_name
+        security_groups.each{|sg| SecurityGroup.exist! sg, "Label for #{cluster.name} #{role} node ##{"%03d"%node_idx}" }
+        self.instance = Wucluster::Instance.create!({
             :image_id          => image_id,
             :key_name          => key_name,
             :security_groups   => security_groups,

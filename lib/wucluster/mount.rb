@@ -4,6 +4,7 @@ module Wucluster
     attr_accessor :role
     attr_accessor :node_idx
     attr_accessor :node_vol_idx
+    #
     attr_accessor :from_snapshot_id
     attr_accessor :device
     attr_accessor :mount_point
@@ -15,6 +16,7 @@ module Wucluster
       self.role          = role
       self.node_idx      = node_idx
       self.node_vol_idx  = node_vol_idx
+      #
       self.device        = device
       self.mount_point   = mount_point
       self.size          = size
@@ -44,12 +46,12 @@ module Wucluster
     end
 
     def volume
-      Ec2Volume.find(volume_id)
+      Volume.find(volume_id)
     end
 
-    def volume=(ec2_volume)
-      Log.info "Setting volume to #{ec2_volume} from #{@volume_id}"
-      @volume_id = ec2_volume ? ec2_volume.id : nil
+    def volume=(volume)
+      Log.info "Setting volume to #{volume} from #{@volume_id}"
+      @volume_id = volume ? volume.id : nil
     end
 
     def status
@@ -83,7 +85,7 @@ module Wucluster
       case
       when created?   then true
       when (volume.nil? || volume.deleted? || volume.deleting?)
-        self.volume = Wucluster::Ec2Volume.create!(
+        self.volume = Wucluster::Volume.create!(
           :size              => size.to_s,
           :from_snapshot_id  => from_snapshot_id,
           :availability_zone => availability_zone,
@@ -181,7 +183,7 @@ module Wucluster
       when volume.snapshotting?   then :wait
       when volume.recently_snapshotted? then true
       when created? && separated? then
-        Wucluster::Ec2Snapshot.create! volume, handle
+        Wucluster::Snapshot.create! volume, handle
       when (not separated?)       then separate! ; :wait
       else raise UnexpectedState, volume.status.to_s
       end
@@ -205,25 +207,6 @@ module Wucluster
     end
     def deleting?
       volume && volume.deleting?
-    end
-
-    #
-    # Volume Cache
-    #
-    def refresh_if_dirty!
-      true
-    end
-
-    #
-    # Snapshot
-    #
-    # List Associated Snapshots
-    def snapshots
-      Wucluster::Ec2Snapshot.for_volume volume
-    end
-
-    def recently_snapshotted?
-      volume && volume.recently_snapshotted?
     end
 
   end

@@ -8,7 +8,7 @@ module Wucluster
     # Hash of mounts, indexed by [role, node_idx, node_vol_idx]
     # Ex:
     #    p cluster.mounts[['master', 0, 0]]
-    #    => #<struct Wucluster::Mount cluster="gibbon", role="master", node=<Wucluster::Node ...>, mount_idx=0, device="/dev/sdh", mount_point="/mnt/home", volume=#<Wucluster::Ec2Volume ...> >
+    #    => #<struct Wucluster::Mount cluster="gibbon", role="master", node=<Wucluster::Node ...>, mount_idx=0, device="/dev/sdh", mount_point="/mnt/home", volume=#<Wucluster::Volume ...> >
     def all_mounts
       load! if @all_mounts.nil?
       @all_mounts
@@ -41,7 +41,7 @@ module Wucluster
 
     # flat list of snapshots from all mounts
     def snapshots
-      Ec2Volume::Snapshot.all.find_all{|snap| }
+      Volume::Snapshot.all.find_all{|snap| }
     end
 
     # Turn the cluster_role_node_mount_tree into a flat list of mounts,
@@ -85,7 +85,7 @@ module Wucluster
 
     def catalog_existing_snapshots
       return unless @all_nodes
-      mount_infos = Ec2Snapshot.all.sort_by(&:created_at).map(&:mount_info).compact
+      mount_infos = Snapshot.all.sort_by(&:created_at).map(&:mount_info).compact
       snapshots_for_mounts = { }
       mount_infos.each do |mnt_info|
         next unless mnt_info[:cluster_name].to_s == name.to_s
@@ -100,7 +100,7 @@ module Wucluster
 
     def catalog_existing_instances
       return unless @all_nodes
-      cluster_instances = Ec2Instance.all.find_all{|inst| inst.security_groups.include?(name.to_s)}
+      cluster_instances = Instance.all.find_all{|inst| inst.security_groups.include?(name.to_s)}
       cluster_instances.map do |inst|
         next if inst.deleted? || inst.deleting?
         cluster, role, node_idx, *_ = Wucluster::Node.params_from_instance(inst)

@@ -27,7 +27,7 @@ module Wucluster
     end
   end
 
-  class MockInstance < Ec2Instance
+  class MockInstance < Instance
     include MockEC2Device
     attr_accessor :status, :id
     def initialize id
@@ -55,7 +55,7 @@ module Wucluster
     end
   end
 
-  class MockVolume < Ec2Volume
+  class MockVolume < Volume
     include MockEC2Device
     attr_accessor :status, :vol_id
     def initialize vol_id
@@ -121,7 +121,7 @@ module Wucluster
     end
   end
 
-  class MockSnapshot # < Ec2Snapshot
+  class MockSnapshot # < Snapshot
     include MockEC2Device
     attr_accessor :status, :volume, :created_at
     cattr_accessor :snapshots

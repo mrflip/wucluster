@@ -30,7 +30,7 @@ module Wucluster
     end
 
     def refresh!
-      [Ec2Keypair, Ec2SecurityGroup, Ec2Volume, Ec2Instance
+      [Keypair, SecurityGroup, Volume, Instance
       ].each{|klass| klass.load_all! }
     end
 

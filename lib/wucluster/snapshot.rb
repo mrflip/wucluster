@@ -2,7 +2,7 @@ module Wucluster
   #
   # Facade for an EBS Snapshot
   #
-  class Ec2Snapshot
+  class Snapshot
     include Ec2Proxy
     ::Settings.define :recent_snapshot_age, :default => (12*60*60), :description => "Time window for figuring if a snapshot is recent"
 
@@ -47,7 +47,7 @@ module Wucluster
 
     # The volume associated with this snapshot
     def volume
-      @volume ||= Ec2Volume.find volume_id
+      @volume ||= Volume.find volume_id
     end
 
     # Look up snapshot for provided volume
@@ -125,7 +125,7 @@ module Wucluster
       response.snapshotSet.item.each(&block)
     end
 
-    # Use the hash sent back from AWS to construct an Ec2Snapshot instance
+    # Use the hash sent back from AWS to construct an Snapshot instance
     #      {"snapshotId"=>"snap-e2f5948b", "volumeId"=>"vol-5f6a8536", "status"=>"completed",
     #      "startTime"=>"2009-12-10T19:45:11.000Z", "progress"=>"100%",
     #      "ownerId"=>"145626931636", "volumeSize"=>"20", "description"=>"12/10/09 backup"}

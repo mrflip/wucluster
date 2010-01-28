@@ -1,111 +1,110 @@
 #!/usr/bin/env ruby
 require 'set'
 
-class Graph
+module Graph
+  # list of triples:
+  #    [goal,  [...preconditions...],  next_action]
+  # that outline workflow.
+  #
+  # It is *not* assumed that the goal is met after next_action is taken,
+  # since actions are assumed to be unreliable.
   attr_reader :dependencies
-  attr_reader :dependency_paths
-  attr_accessor :dependency_met
+  # maximum path  through graph to allow
+  MAX_DEPENDENCY_GRAPH = 20 unless defined?(MAX_DEPENDENCY_GRAPH)
 
+  # Create a new dependency graph
+  #
+  # @param dependencies [Array] list of dependency links -- see documentation
+  #for #dependencies
   def initialize dependencies
     @dependencies = dependencies
+  end
+
+  # Retrieve the preconditions and next step for the given goal.
+  #
+  # @param goal [Symbol] goal to reach
+  def dependencies_for goal
+    found, preconditions, next_action = dependencies.assoc(goal)
+    preconditions = [preconditions].flatten.compact
+    warn "No origin for #{goal} goal" unless found
+    [found, preconditions, next_action]
+  end
+
+  # Tries to reach the given state.
+  # * assert each precondition in turn by recursively calling #become.
+  # * if all preconditions are met,
+  # * try the next step
+  #
+  # Asking to become a given state *doesn't* mean you'll reach that state, it
+  # only promises that it will attempt to move closer to the goal. A call chain
+  # to become will only take one unreliable step: if the system isn't in the
+  # goal state after the call to next_action, no further actions happen in that
+  # branch of the tree.
+  #
+  # @param goal  [Symbol] the state assertion to reach
+  # @return true if the goal was met
+  def become goal, level=0
+    return true if met?(goal)
+    raise "reaching goal #{goal} would need too many steps" if level > MAX_DEPENDENCY_GRAPH
+    found, preconditions, next_action = dependencies_for(goal)
+    # attempt each precondition in turn
+    success = preconditions.map do |precondition|
+      become precondition, level+1
+    end
+    # if all preconditions are met, try next step
+    take_next_action(next_action, goal) if success.all?
+    return met?(goal)
+  end
+
+  def take_next_action next_action, goal
+    self.send(next_action)
+  end
+
+  def met? goal
+    self.send(goal)
+  end
+end
+
+class GraphSim
+  include Graph
+  # fakes the dependency state
+  attr_accessor :dependency_met
+  # distribute the level out to rest of object (kludge)
+  attr_accessor :level
+  # probability a goal
+  CHANCE_GOAL_REACHED = 0.4
+
+  def initialize dependencies
+    super dependencies
     @dependency_met = Set.new
   end
 
-  def bfs
-
-  end
-
   def become goal, level=0
-    raise "oops" if level > 20
-    return true if met?(goal)
-    found, preconditions, next_step = dependencies.assoc(goal)
-    preconditions = [preconditions].flatten.compact
-    warn "No origin for #{goal} goal" unless found
-    puts "%-40s %s" % [" "*level + goal.to_s, preconditions.inspect] unless preconditions.empty?
-    success = preconditions.map do |precondition|
-      become precondition, level+2
-    end
-    # p [goal, next_step, preconditions.map{|cond| [cond, met?(cond)]}, dependency_met]
-    if success.all?
-      puts "%-40s" % [" "*level + '  => ' + next_step.to_s] if next_step
-      self.met! goal
-      puts "  #{" "*level}met #{goal.to_s.gsub(/\?/,'.')}" if met?(goal)
-    end
-    met?(goal)
+    self.level = level
+    super(goal, level)
   end
 
+  def dependencies_for goal
+    found, preconditions, next_action = super(goal)
+    puts "%-40s %s" % [" "*2*level + goal.to_s, preconditions.inspect] unless preconditions.empty?
+    [found, preconditions, next_action]
+  end
+
+  def take_next_action next_action, goal
+    # instead of calling out to next step, just fake it.
+    puts "%-40s" % [" "*2*level + '  => ' + next_action.to_s] if next_action
+    self.met! goal
+    puts "  #{" "*2*level}met #{goal.to_s.gsub(/\?/,'.')}" if met?(goal)
+  end
+
+  # fakes an unreliable process:
   def met! goal
-    return unless rand(10) < 5
+    return unless rand < CHANCE_GOAL_REACHED
     self.dependency_met << goal
   end
 
+  #
   def met? goal
     self.dependency_met.include? goal
   end
 end
-
-cluster_graph = [
-  [:launched?,        [:mounts_launched?, :nodes_launched?], nil],
-  [:nodes_launched?,  nil, :launch_nodes!],
-  [:mounts_launched?, nil, :launch_mounts!],
-]
-
-mount_graph = [
-  [:away?,          nil,                         nil],
-  [:creating?,      :away?,                      :create!],
-  [:created?,       :creating?,                  :wait],
-  # [:node_running?,  nil,                         :node_create!],
-  [:attaching?,    [:created?,  :node_running?], :attach!],
-  [:attached?,      :attaching?,                 :wait],
-  [:mounted?,       :attached?,                  :mount!],
-  [:completed?,      :mounted?,                   nil],
-
-  [:node_away?, nil, nil],
-  [:node_starting?,      :node_away?,                        :node_start!],
-  [:node_running?,       :node_starting?,                    :wait],
-  [:node_completed?,      :node_created?,                     nil],
-]
-
-
-node_graph = [
-  [:away?, nil, nil],
-  [:running?,      :away?,                        :create!],
-  [:created?,       :running?,                    :wait],
-  [:completed?,      :created?,                     nil],
-]
-
-# ===========================================================================
-
-migration_graph = [
-  [:raw_file_exists?, nil, nil],
-  [:raw_file_alone?,   :raw_file_exists?,                 :remove_non_raw!],
-  [:checksummed?,      :raw_file_alone?,                  :checksum_raw!],
-  [:pkgd?,             :checksummed?,                     :pkg_and_remove!],
-  [:pkg_checksummed?,   :pkgd?,                            :checksum_pkg!],
-  [:pkg_on_s3?,        [:pkgd?, :pkg_checksummed?],       :copy_pkgd_to_s3!],
-  [:pkg_removed?,      :pkg_removable?,                   :remove_local_pkg!],
-  [:pkgsum_removed?,   [:pkg_checksummed?, :pkg_removed?], :remove_local_pkgsum!],
-  [:checksum_on_s3?,   :checksummed?,                     :copy_checksum_to_s3!],
-  [:checksum_removed?, :checksum_on_s3?,                  :remove_local_checksum!],
-  [:completed?, [:pkg_on_s3?, :checksum_on_s3?, :pkg_removed?, :checksum_removed?, :pkgsum_removed?], nil],
-
-  #
-  [:pkg_removable?, [:pkgd?, :pkg_on_s3?, :pkg_checksummed?, :pkg_and_s3_are_identical?], nil],
-  [:pkg_and_s3_are_identical?, [:pkgd?, :pkg_on_s3?, :pkg_checksummed?], nil],
-
-]
-
-graph = Graph.new(mount_graph)
-graph.dependency_met += [:away?, :node_away?]
-10.times do
-  graph.become :completed?
-  break if graph.met? :completed?
-end
-
-
-# Graph.new(migration_graph).become :completed?
-
-def pkg_removable?
-  [:pkgd?, :pkg_checksummed?]
-end
-

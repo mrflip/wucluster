@@ -2,7 +2,7 @@ module Wucluster
   #
   # Facade for an EBS Snapshot
   #
-  class Ec2Keypair
+  class Keypair
     include Ec2Proxy
 
     # Keyname of keypair
@@ -73,7 +73,7 @@ module Wucluster
     end
 
     #
-    # Use the hash sent back from AWS to construct an Ec2SecurityGroup instance
+    # Use the hash sent back from AWS to construct an SecurityGroup instance
     #
     # @example
     #   # response

@@ -30,12 +30,12 @@ module Wucluster
   autoload :Cluster,          'wucluster/cluster'
   autoload :Mount,            'wucluster/mount'
   autoload :Node,             'wucluster/node'
-  autoload :Ec2Proxy,         'wucluster/ec2_proxy'
-  autoload :Ec2Volume,        'wucluster/ec2_volume'
-  autoload :Ec2Instance,      'wucluster/ec2_instance'
-  autoload :Ec2Snapshot,      'wucluster/ec2_snapshot'
-  autoload :Ec2SecurityGroup, 'wucluster/ec2_security_group'
-  autoload :Ec2Keypair,       'wucluster/ec2_keypair'
+  autoload :Proxy,         'wucluster/proxy'
+  autoload :Volume,        'wucluster/volume'
+  autoload :Instance,      'wucluster/instance'
+  autoload :Snapshot,      'wucluster/snapshot'
+  autoload :SecurityGroup, 'wucluster/security_group'
+  autoload :Keypair,       'wucluster/keypair'
 
   #
   # single point of access to AWS calls
