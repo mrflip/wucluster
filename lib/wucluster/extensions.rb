@@ -1,0 +1,1 @@
+require 'wucluster/extensions/hash'

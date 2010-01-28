@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 require 'set'
 
-module Graph
+module DependencyGraph
   # list of triples:
   #    [goal,  [...preconditions...],  next_action]
   # that outline workflow.
@@ -11,14 +11,6 @@ module Graph
   attr_reader :dependencies
   # maximum path  through graph to allow
   MAX_DEPENDENCY_GRAPH = 20 unless defined?(MAX_DEPENDENCY_GRAPH)
-
-  # Create a new dependency graph
-  #
-  # @param dependencies [Array] list of dependency links -- see documentation
-  #for #dependencies
-  def initialize dependencies
-    @dependencies = dependencies
-  end
 
   # Retrieve the preconditions and next step for the given goal.
   #
@@ -65,8 +57,8 @@ module Graph
   end
 end
 
-class GraphSim
-  include Graph
+class DependencyGraphSim
+  include DependencyGraph
   # fakes the dependency state
   attr_accessor :dependency_met
   # distribute the level out to rest of object (kludge)
@@ -75,7 +67,7 @@ class GraphSim
   CHANCE_GOAL_REACHED = 0.4
 
   def initialize dependencies
-    super dependencies
+    self.dependencies = dependencies
     @dependency_met = Set.new
   end
 

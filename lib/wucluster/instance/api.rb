@@ -9,6 +9,11 @@ module Wucluster
     def terminating?()   shutting_down?  end
     def deleting?()      shutting_down?  end
 
+
+    def get_cluster_node_id cluster_name
+      # return unless security_groups.include?(cluster_name.to_s)
+      security_groups.find_all{|sg| sg =~ /^#{cluster_name}-/}.sort.last
+    end
     # ===========================================================================
     #
     # Actions

@@ -3,6 +3,19 @@ module Wucluster
   class Instance
     include Ec2Proxy
 
+    # Instance's meta-attributes, defined by the cluster
+
+    # Cluster this volume belongs to
+    attr_accessor :cluster
+    # string identifying logical role
+    attr_accessor :role
+    # identifier for this node within the cluster -- distinct from the AWS
+    # instance ID, this uniquely specifies the instance within the cluster
+    # itself.
+    attr_accessor :cluster_node_id
+    # mount path for volume
+    attr_accessor :mount_point
+
     # Unique ID of a machine image.
     attr_accessor :id
     # instance status: pending, running, shutting-down, terminated, stopping, stopped
@@ -22,9 +35,8 @@ module Wucluster
     attr_accessor :public_ip
     # Instance launch time. The time the instance launched
     attr_accessor :created_at
-    #
+    # AWS' AMI id for the machine image to use
     attr_accessor :image_id
-
 
     node_graph = [
       [:away?, nil, nil],
@@ -36,6 +48,12 @@ module Wucluster
       [:terminating?,   :terminateable?,  :terminate!],
       [:terminated, :terminating?, :wait],
     ]
+
+    def self.new_cluster_instance cluster, role, cluster_node_id, image_id, instance_type
+      new Hash.zip(
+        [:cluster, :role, :cluster_node_id, :image_id, :instance_type],
+        [ cluster,  role,  cluster_node_id,  image_id,  instance_type])
+    end
 
     def to_s
       %Q{#<#{self.class} #{id} #{status} #{key_name} #{security_groups.inspect} #{public_ip} #{private_ip} #{created_at} #{instance_type} #{availability_zone} #{image_id}>}

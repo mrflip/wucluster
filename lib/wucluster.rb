@@ -5,6 +5,7 @@ require 'AWS'
 require 'AWS/EC2/overrides'
 require 'json'
 require 'wucluster/exceptions'
+require 'wucluster/extensions'
 Log = Logger.new $stderr unless defined?(Log)
 
 Settings.define :sleep_time, :type => Float,   :default => 1.0,   :description => "How long to sleep between attempts"
