@@ -66,30 +66,8 @@ module Wucluster
       @instance_id = instance ? instance.id : nil
     end
 
-    # Placement constraints (Availability Zones) for launching the instances.
-    def availability_zone
-      cluster.availability_zone
-    end
-
     def self.new_from_instance cluster, role, node_idx, instance
       self.new cluster, role, node_idx, instance.image_id, instance.instance_type, instance.id
-    end
-
-    # Name of the security group. Act as both logical labels for the instance
-    # and define its security policy
-    #
-    # The nodes label themselves with cluster name and with cluster.name-role
-    #
-    # @example
-    #   cluster = Cluster.new :bonobo
-    #   Node.new cluster, :master, 0,
-    def security_groups
-      [cluster.name.to_s, "#{cluster.name}-#{role}", "#{cluster.name}-#{role}-#{"%03d"%node_idx}"]
-    end
-
-    # The name of the AWS key pair, used for remote access to instance
-    def key_name
-      cluster.name.to_s
     end
 
     def run!

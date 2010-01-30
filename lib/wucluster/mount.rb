@@ -37,14 +37,6 @@ module Wucluster
       [cluster.name, role, "%03d"%node_idx, "%03d"%node_vol_idx].join("+")
     end
 
-    def handle
-      [cluster.name, role, "%03d"%node_idx, "%03d"%node_vol_idx, device, mount_point, volume_id, size].join("+")
-    end
-
-    def availability_zone
-      cluster.availability_zone
-    end
-
     def volume
       Volume.find(volume_id)
     end

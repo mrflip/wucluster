@@ -22,7 +22,7 @@ Settings.define :clusters,                     :description => "Hash describing 
 Settings.read("wucluster.yaml") # will look in ~/.configliere/wucluster.yaml
 Settings.finally do |cfg|
   cfg[:private_key_dir].gsub!(/%\(home\)s/, ENV['HOME'])
-  cfg[:ssh_options].gsub(/%\(private_key\)s/, cfg[:private_key_dir])
+  cfg[:ssh_options].gsub!(/%\(private_key\)s/, cfg[:private_key_dir])
 end
 Settings.resolve!
 

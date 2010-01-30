@@ -34,8 +34,8 @@ module Wucluster
     # existing instances and volumes
     def load!
       load_layout
-      # catalog_existing_volumes!
-      # catalog_existing_instances!
+      adopt_existing_volumes!
+      adopt_existing_instances!
     end
 
     # find cluster if it exists,

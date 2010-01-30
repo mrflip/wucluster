@@ -44,59 +44,27 @@ module DependencyGraph
       become precondition, level+1
     end
     # if all preconditions are met, try next step
-    take_next_action(next_action, goal) if success.all?
+    take_next_action(next_action, goal) if next_action && success.all?
     return met?(goal)
   end
 
+  # Invokes the next action: calls the corresponding method on self.
+  #
+  # @example
+  #   take_next_action :launch_missiles!
+  #   # => tries to launch missiles
   def take_next_action next_action, goal
+    Log.info [next_action, self].inspect
+    return if next_action == :wait
     self.send(next_action)
   end
 
+  # Was the goal met? Calls the corresponding method on self.
+  #
+  # @example
+  #   met? :created?
+  #   # => returns value of self.created?
   def met? goal
     self.send(goal)
-  end
-end
-
-class DependencyGraphSim
-  include DependencyGraph
-  # fakes the dependency state
-  attr_accessor :dependency_met
-  # distribute the level out to rest of object (kludge)
-  attr_accessor :level
-  # probability a goal
-  CHANCE_GOAL_REACHED = 0.4
-
-  def initialize dependencies
-    self.dependencies = dependencies
-    @dependency_met = Set.new
-  end
-
-  def become goal, level=0
-    self.level = level
-    super(goal, level)
-  end
-
-  def dependencies_for goal
-    found, preconditions, next_action = super(goal)
-    puts "%-40s %s" % [" "*2*level + goal.to_s, preconditions.inspect] unless preconditions.empty?
-    [found, preconditions, next_action]
-  end
-
-  def take_next_action next_action, goal
-    # instead of calling out to next step, just fake it.
-    puts "%-40s" % [" "*2*level + '  => ' + next_action.to_s] if next_action
-    self.met! goal
-    puts "  #{" "*2*level}met #{goal.to_s.gsub(/\?/,'.')}" if met?(goal)
-  end
-
-  # fakes an unreliable process:
-  def met! goal
-    return unless rand < CHANCE_GOAL_REACHED
-    self.dependency_met << goal
-  end
-
-  #
-  def met? goal
-    self.dependency_met.include? goal
   end
 end

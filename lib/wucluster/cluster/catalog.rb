@@ -16,7 +16,7 @@ module Wucluster
     # end
     #
 
-    def adopt_existing_instances
+    def adopt_existing_instances!
       Instance.all.each do |ec2_inst|
         next if ec2_inst.deleted? || ec2_inst.deleting?
         cluster_node_id = ec2_inst.get_cluster_node_id(self.name) or next
@@ -25,7 +25,7 @@ module Wucluster
       end
     end
 
-    def adopt_existing_volumes
+    def adopt_existing_volumes!
       Volume.all.each do |ec2_vol|
         next if ec2_vol.deleted? || ec2_vol.deleting?
         cluster_vol_id = 'bonobo-master-000-/ebs2' # ec2_vol.get_cluster_vol_id(self.name) or next

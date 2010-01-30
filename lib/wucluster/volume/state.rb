@@ -51,7 +51,7 @@ module Wucluster
     def detaching?() status == :detaching end
     def busy?()      status == :busy      end
     def error?()     status == :error     end
-    def mounted?()   attached? && (mounted_status == :mounted) end
+    def mounted?()   attached? && true end
 
     #
     # Facade for EC2 API
@@ -63,7 +63,7 @@ module Wucluster
       Log.info "Creating #{self}"
       response = Wucluster.ec2.create_volume options.merge(
         :availability_zone => self.availability_zone,
-        :size              => self.size,
+        :size              => self.size.to_s,
         :snapshot_id       => self.from_snapshot_id
         )
       Log.debug response
@@ -80,7 +80,7 @@ module Wucluster
     end
 
     # start attaching volume to its instance
-    def attach! instance, device, options={}
+    def attach! options={}
       return :wait if attaching? || attached?
       Log.info "Attaching #{self} to #{instance} as #{device}"
       response = Wucluster.ec2.attach_volume options.merge( :volume_id => self.id, :instance_id => instance.id, :device => device)
