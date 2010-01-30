@@ -11,8 +11,18 @@ module Wucluster
         [ cluster,  role,  cluster_vol_id,  cluster_node_id, mount_point,  size,  from_snapshot_id,  availability_zone,  device])
     end
 
+    # availability_zone, either as set from concrete manifestation or (else) as
+    # logically defined by cluster.
     def availability_zone
-      cluster.availability_zone if cluster
+      @availability_zone || (cluster && cluster.availability_zone)
+    end
+
+    # Use attachment info to recover the cluster and instance
+    def get_instance_ids
+      return nil unless attached?
+      instance = Wucluster::Instance.find(attached_instance_id) or return
+      cluster  = instance.cluster
+      [cluster.id, instance.id]
     end
 
     #
@@ -36,14 +46,18 @@ module Wucluster
     # Snapshots
     #
 
+    def start_snapshotting!
+      @current_snapshot = Snapshot.create! self, self.handle
+    end
+
     # Snapshot this volume was created from.
     def from_snapshot
-      Wucluster::Snapshot.find(snapshot_id)
+      Wucluster::Snapshot.find(from_snapshot_id)
     end
 
     # List all snapshots for
     def snapshots
-      Wucluster::Snapshot.for_volume(self)
+      Wucluster::Snapshot.for_volume_id(self.id)
     end
 
     # List the newest snapshot (regardless of its current

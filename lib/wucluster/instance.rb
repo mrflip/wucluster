@@ -11,12 +11,10 @@ module Wucluster
     attr_accessor :cluster
     # string identifying logical role
     attr_accessor :role
-    # identifier for this node within the cluster -- distinct from the AWS
+    # identifier for this instance within the cluster -- distinct from the AWS
     # instance ID, this uniquely specifies the instance within the cluster
     # itself.
     attr_accessor :cluster_node_id
-    # mount path for volume
-    attr_accessor :mount_point
 
     # Unique ID of a machine image.
     attr_accessor :id
@@ -40,6 +38,39 @@ module Wucluster
     # AWS' AMI id for the machine image to use
     attr_accessor :image_id
 
+    def to_hash
+      %w[
+        cluster role cluster_node_id
+        id status key_name security_groups availability_zone instance_type public_ip private_ip created_at image_id
+        ].inject({}){|hsh, attr| hsh[attr.to_sym] = self.send(attr); hsh}
+    end
+    def cluster_node_index
+      cluster_node_id.split(/-/).last
+    end
+
+    #
+    # Actions to take for volume
+    #
+
+    # Become fully created, attached, mounted
+    def launch!
+      run!
+    end
+    def launched?
+      running?
+    end
+
+    # Become fully unmounted, detached, snapshotted, deleted,
+    def put_away!
+      terminate!
+    end
+    def put_away?
+      terminated?
+    end
+
+    def run!()       self.become :running?     end
+    def terminate!() self.become :terminated?  end
+
     NODE_GRAPH = [
       [:away?, nil, nil],
       [:pending?,          :away?,               :start_running!],
@@ -61,10 +92,6 @@ module Wucluster
     end
     def inspect
       to_s
-    end
-    def to_hash
-      %w[id status key_name security_groups availability_zone instance_type public_ip private_ip created_at image_id
-        ].inject({}){|hsh, attr| hsh[attr.to_sym] = self.send(attr); hsh}
     end
   end
 end

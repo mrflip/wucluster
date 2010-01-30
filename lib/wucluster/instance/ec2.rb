@@ -9,10 +9,11 @@ module Wucluster
     def pending?()       status == :pending        end
     def running?()       status == :running        end
     def terminated?()    status == :terminated     end
-    def deleted?()        terminated?  end
+    def busy?()          status == :busy           end
+    def deleted?()       terminated?               end
     def shutting_down?() status == :shutting_down  end
-    def terminating?()   shutting_down?  end
-    def deleting?()      shutting_down?  end
+    def terminating?()   shutting_down?            end
+    def deleting?()      shutting_down?            end
 
     def away?
       id.nil? || deleted?
@@ -25,6 +26,21 @@ module Wucluster
 
     def launched?
       running?
+    end
+
+    # the attributes that come from AWS api, describe its concrete representation
+    def ec2_attributes
+      to_hash.slice(
+        :id, :status, :key_name, :security_groups, :availability_zone,
+        :instance_type, :public_ip, :private_ip, :created_at, :image_id
+        )
+    end
+
+    # the attributes that come from AWS api, describe its concrete representation
+    def logical_attributes
+      to_hash.slice(
+        :cluster, :role, :cluster_node_id
+        )
     end
 
     # ===========================================================================
@@ -55,7 +71,7 @@ module Wucluster
     # @option options [optional, String] :instance_initiated_shutdown_behavior ('stop') Specifies whether the instance's Amazon EBS volumes are stopped or terminated when the instance is shut down. Valid values : 'stop', 'terminate'
     #
     def start_running! options={}
-      return :wait if pending? || running?
+      return :wait if pending? || running? || busy?
       Log.info "Running #{self}"
       response = Wucluster.ec2.run_instances options.merge(:image_id => image_id,
         :key_name => key_name, :security_group => security_groups, :availability_zone => availability_zone,
@@ -67,7 +83,7 @@ module Wucluster
 
     # Shut down the corresponding instance
     def start_terminating! options={}
-      return :wait if terminating? || terminated?
+      return :wait if terminating? || terminated? || busy?
       Log.info "Terminating #{self}"
       response = Wucluster.ec2.terminate_instances options.merge(:instance_id => [self.id])
       new_state = response.instancesSet.item.first.currentState.name rescue nil

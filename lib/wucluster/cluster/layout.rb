@@ -64,7 +64,7 @@ module Wucluster
 
     # constructs a volume from its layout description
     def load_volume cluster_node_id, volume_cfg
-      cluster_vol_id = cluster_node_id + '-' + volume_cfg[:mount_point]
+      cluster_vol_id = cluster_node_id + '-' + volume_cfg[:device]
       cluster_vol_params = {
         :cluster => self,
         :cluster_vol_id => cluster_vol_id, :cluster_node_id => cluster_node_id,

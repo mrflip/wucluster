@@ -7,6 +7,8 @@ module Wucluster
   # as embodied in the hadoop-ec2 config files
   #
   class Cluster
+    include DependencyGraph
+
     # Name for this cluster. Security groups, key names and other attributes are
     # defined from this name.
     attr_accessor :name
@@ -31,13 +33,22 @@ module Wucluster
     def launch!
       repeat_until(:launched?) do
         instances.each{|inst| inst.launch! }
-        volumes.each{  |inst| inst.launch! }
+        volumes.each{  |vol|  vol.launch! }
       end
     end
     # A launched cluster is a fully armed and operational battlestation. Right
     # now, same as #mount! -- but it's possible other assertions could be added.
     def launched?
       instances.all?(&:launched?) && volumes.all?(&:launched?)
+    end
+
+    def separate!
+      repeat_until(:separated?) do
+        volumes.each{  |vol| vol.detach! }
+      end
+    end
+    def separated?
+      volumes.all?(&:detached?)
     end
 
     # terminate this cluster:
@@ -57,13 +68,14 @@ module Wucluster
 
     # Bulk reload the state of all volumes, instances, SecurityGroups and Keypairs
     def refresh!
-      [ Volume, Instance, SecurityGroup, Keypair ].each{|klass| klass.load_all! }
+      [ Volume, Instance, Snapshot, SecurityGroup, Keypair ].each{|klass| klass.load_all! }
     end
 
     # pull in cluster's logical layout, and pair up any
     # existing instances and volumes
     def load!
       load_layout
+      refresh!
       adopt_existing_volumes!
       adopt_existing_instances!
     end
@@ -87,22 +99,5 @@ module Wucluster
       %Q{#<#{self.class} #{self.name} nodes: #{roles_count.inspect} #{mounts.length} mounts>}
     end
 
-  protected
-    # repeat_until test, [sleep_time]
-    #
-    # * runs block
-    # * tests for completion by calling (on self) the no-arg method +test+
-    # * if the test fails, sleep for a bit...
-    # * ... and then try again
-    #
-    # will only attempt MAX_TRIES times
-    def repeat_until test, &block
-      Settings.max_tries.times do
-        yield
-        break if self.send(test)
-        sleep Settings.sleep_time
-        refresh!
-      end
-    end
   end
 end

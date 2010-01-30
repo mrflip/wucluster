@@ -10,7 +10,7 @@ module Wucluster
     #
 
     # Volume's meta-attributes, defined by the cluster
-    
+
     # Cluster this volume belongs to
     attr_accessor :cluster
     # cluster identifier for this volume
@@ -21,7 +21,7 @@ module Wucluster
     attr_accessor :mount_point
 
     # These attributes define the volume for AWS
-    
+
     # Unique ID of an EBS volume
     attr_accessor :id
     # The size of the volume, in GiBs.
@@ -36,7 +36,7 @@ module Wucluster
     attr_accessor :deletes_on_termination
 
     # These attributes are under AWS' control
-    
+
     # Volume state: creating, available, in-use, deleting, deleted, error
     attr_accessor :existence_status
     # Time stamp when volume creation was initiated.
@@ -49,28 +49,56 @@ module Wucluster
     attr_accessor :attached_at
 
     #
+    # Actions to take for volume
+    #
+
+    # Become fully created, attached, mounted
+    def launch!
+      mount!
+    end
+    def launched?
+      mounted?
+    end
+
+    # Become fully unmounted, detached, snapshotted, deleted, 
+    def put_away!
+      delete!
+    end
+    def put_away?
+      deleted?
+    end
+
+    def create!()   self.become :created?     end
+    def attach!()   self.become :attached?    end
+    def mount!()    self.become :mounted?     end
+    def unmount!()  self.become :unmounted?   end
+    def detach!()   self.become :detached?    end
+    def delete!()   self.become :deleted?     end
+    def snapshot!() self.become :snapshotted? end
+
+    #
     # State diagram for volume setup and teardown
     #
 
     cattr_accessor :volume_graph
     self.volume_graph = [
       # goal                  precondition            next_action
-      [:away?,                 nil,                   nil],                     
-      [:creating?,             :away?,                :create!],                
+      [:put_away?,              nil,                   nil],
+      [:creating?,             :put_away?,            :start_creating!],
       [:created?,              :creating?,            :wait],
       #
-      [:attaching?,           [:created?,  :instance_running?], :attach!],         
-      [:attached?,             :attaching?,           :wait],                   
-      [:mounted?,              :attached?,            :mount!],                 
-      [:launched?,            :mounted?,             nil],                     
-      #                                                                         
-      [:unmounted?,            :unmountable?,         :unmount!],
-      [:detaching?,            :unmounted?,           :separate!],              
-      [:detached?,             :detaching?,           :wait],                   
-      [:deleting?,            [:detached?, :recently_snapshotted?], :delete!], 
-      [:deleted?,              :deleting?,            :wait],                   
+      [:attaching?,           [:created?,  :instance_running?], :start_attaching!],
+      [:attached?,             :attaching?,           :wait],
+      [:mounted?,              :attached?,            :start_mounting!],
+      [:launched?,            :mounted?,             nil],
       #
-      [:snapshotting?,         :detached?,            :snapshot!],
+      [:unmounted?,            :unmountable?,         :start_unmounting!],
+      [:detaching?,            :unmounted?,           :start_detaching!],
+      [:detached?,             :detaching?,           :wait],
+      [:deleting?,            [:detached?, :recently_snapshotted?], :start_deleting!],
+      [:deleted?,              :deleting?,            :wait],
+      #
+      [:snapshotting?,         :detached?,            :start_snapshotting!],
       [:recently_snapshotted?, :snapshotting?,        :wait],
       [:instance_running?,     nil,                   :run_instance!]
     ]
@@ -80,7 +108,7 @@ module Wucluster
     end
 
     def to_s
-      %Q{#<#{self.class} #{id} #{status} #{size}GB #{availability_zone} #{created_at} att: #{attached_instance_id} @ #{attached_at}>}
+      %Q{#<#{self.class} #{id} #{status} #{size}GB #{availability_zone} #{created_at} att: #{attached_instance_id} @ #{attached_at} #{mount_point} #{device} >}
     end
     def inspect() to_s end
     def to_hash
@@ -90,7 +118,7 @@ module Wucluster
         ].inject({}){|hsh, attr| hsh[attr.to_sym] = self.send(attr); hsh}
     end
     def handle
-      [cluster.name, cluster_node_id, device, mount_point, volume_id, size].join("+")
+      [cluster.name, instance.role, instance.cluster_node_index, 0, device, mount_point, id, size].join("+")
     end
   end
 end

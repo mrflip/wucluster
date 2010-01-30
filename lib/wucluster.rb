@@ -16,12 +16,13 @@ require 'wucluster/extensions'
 # Rather than describe a process to construct a cluster -- which requ
 #
 module Wucluster
-  autoload :Cluster,       'wucluster/cluster'
-  autoload :Volume,        'wucluster/volume'
-  autoload :Instance,      'wucluster/instance'
-  autoload :Snapshot,      'wucluster/snapshot'
-  autoload :SecurityGroup, 'wucluster/security_group'
-  autoload :Keypair,       'wucluster/keypair'
+  autoload :DependencyGraph, 'wucluster/dependency_graph'
+  autoload :Cluster,         'wucluster/cluster'
+  autoload :Volume,          'wucluster/volume'
+  autoload :Instance,        'wucluster/instance'
+  autoload :Snapshot,        'wucluster/snapshot'
+  autoload :SecurityGroup,   'wucluster/security_group'
+  autoload :Keypair,         'wucluster/keypair'
 
   #
   # single point of access to AWS calls

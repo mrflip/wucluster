@@ -28,21 +28,28 @@ module Wucluster
     # Associations
     #
 
-    # Logical cluster mount info for this snapshot
-    def mount_info
+    # Logical volume info for this snapshot
+    def volume_info
       return @mount_info if @mount_info
       return nil if mount_handle.blank?
-      cluster_name, role, node_idx, node_vol_idx, device, mount_point, volume_id, size = mount_handle.split(/\+/)
+      fields  = mount_handle.split(/\+/)
+      if fields[3] =~ /^\d+$/ then fields.slice!(3) end
+      cluster_name, role, node_idx, device, mount_point, volume_id, size = fields
       return nil if role.blank?
       node_idx = node_idx.to_i
-      node_vol_idx = node_vol_idx.to_i
       size = size.to_i
-      { :cluster_name => cluster_name, :role => role, :node_idx => node_idx, :node_vol_idx => node_vol_idx,
-        :device => device, :mount_point => mount_point, :volume_id => volume_id, :size => size,
-        :from_snapshot_id => id, :snapshotted_at => created_at }
+      cluster = Cluster.find cluster_name
+      { :cluster => cluster,
+        # :role => role,
+        :cluster_node_id => "#{cluster_name}-#{role}-#{"%03d"%node_idx}",
+        :cluster_vol_id  => "#{cluster_name}-#{role}-#{"%03d"%node_idx}-#{device}",
+        :device => device, :mount_point => mount_point, :id => volume_id, :size => size,
+        :from_snapshot_id => id,
+        # :snapshotted_at => created_at
+      }
     end
     def cluster_name
-      mount_info[:cluster_name]
+      volume_info[:cluster_name]
     end
 
     # The volume associated with this snapshot
@@ -51,9 +58,9 @@ module Wucluster
     end
 
     # Look up snapshot for provided volume
-    def self.for_volume volume
-      return [] unless volume
-      all.find_all{|snap| snap.volume_id == volume.id }
+    def self.for_volume_id volume
+      return [] unless volume_id
+      all.find_all{|snap| snap.volume_id == volume_id }
     end
 
     def self.for_cluster cluster

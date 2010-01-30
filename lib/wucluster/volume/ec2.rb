@@ -12,7 +12,7 @@ module Wucluster
     end
 
     # Is the volume is completely put away?
-    def away?
+    def put_away?
       id.nil? || deleted?
     end
 
@@ -36,7 +36,7 @@ module Wucluster
       when :creating             then :creating
       when :available
         case attachment_status
-        when nil, :detached      then :detached
+        when :detached, nil      then :detached
         when :detaching          then :detaching
         when :attaching          then :attaching
         when :busy               then :busy
@@ -44,7 +44,7 @@ module Wucluster
       when :in_use
         case attachment_status
         when :attached           then :attached
-        when :detaching          then :detaching
+        when :detaching, nil     then :detaching
         when :attaching          then :attaching
         when :busy               then :busy
         else                     raise UnexpectedState, "#{existence_status} - #{attachment_status}" end
@@ -67,6 +67,10 @@ module Wucluster
     def unmounted?
       (not attached?) || @mounted_status.nil? || (@mounted_status == :unmounted)
     end
+    # override if you don't want to allow volumes to be unmounted at any time
+    def unmountable?
+      true
+    end
 
     # ===========================================================================
     #
@@ -80,17 +84,32 @@ module Wucluster
       update! self.class.api_hsh_to_params(response.volumeSet.item.first)
     end
 
-  protected
-
     # update internal state using a full api response
     def update! *args
       clear_attachment_info!
       super(*args)
     end
 
+    # the attributes that come from AWS api, describe its concrete representation
+    def ec2_attributes
+      to_hash.slice(
+        :id, :size, :from_snapshot_id,
+        :availability_zone, :device, :deletes_on_termination,
+        :existence_status, :created_at, :attached_instance_id,
+        :attachment_status, :attached_at
+        )
+    end
+
+    # the attributes that come from AWS api, describe its concrete representation
+    def logical_attributes
+      to_hash.slice( :cluster, :cluster_vol_id, :cluster_node_id, :mount_point )
+    end
+
+  protected
+
     # start creating volume
     def start_creating! options={}
-      return :wait if creating? || created?
+      return :wait if creating? || created? || busy?
       Log.info "Creating #{self}"
       response = Wucluster.ec2.create_volume options.merge(
         :availability_zone => self.availability_zone,
@@ -112,7 +131,7 @@ module Wucluster
 
     # start attaching volume to its instance
     def start_attaching! options={}
-      return :wait if attaching? || attached?
+      return :wait if attaching? || attached? || busy?
       Log.info "Attaching #{self} to #{instance} as #{device}"
       response = Wucluster.ec2.attach_volume options.merge( :volume_id => self.id, :instance_id => instance.id, :device => device)
       Log.debug response
@@ -121,7 +140,7 @@ module Wucluster
 
     # start removing volume from its instance
     def start_detaching! options={}
-      return :wait if detaching? || detached?
+      return :wait if detaching? || detached? || busy?
       Log.info "Detaching #{self} from #{attached_instance_id}"
       response = Wucluster.ec2.detach_volume options.merge(:volume_id => self.id, :instance_id => self.attached_instance_id, :device => device)
       Log.debug response
@@ -132,7 +151,7 @@ module Wucluster
 
     # start deleting volume
     def start_deleting! options={}
-      return :wait if deleting? || deleted?
+      return :wait if deleting? || deleted? || busy?
       Log.info "Deleting #{self}"
       response = Wucluster.ec2.delete_volume options.merge(:volume_id => self.id)
       Log.debug response
@@ -163,6 +182,7 @@ module Wucluster
 
     # construct instance using hash as sent back from AWS
     def self.api_hsh_to_params(api_hsh)
+      # Log.debug api_hsh.inspect
       hsh = {
         :id                  => api_hsh['volumeId'],
         :from_snapshot_id    => api_hsh['snapshotId'],
