@@ -1,7 +1,6 @@
 require 'wucluster/cluster/components'
 require 'wucluster/cluster/layout'
 require 'wucluster/cluster/catalog'
-require 'wucluster/cluster/commands'
 module Wucluster
   #
   # Cluster holds our idea of a hadoop cluster,
@@ -19,15 +18,46 @@ module Wucluster
     # default instance type for cluster nodes
     attr_accessor :instance_type
 
-    # cluster_graph = [
-    #   [:launched?,        [:mounts_launched?, :nodes_launched?], nil],
-    #   [:nodes_launched?,  nil, :launch_nodes!],
-    #   [:mounts_launched?, nil, :launch_mounts!],
-    # ]
-
     # construct new cluster
     def initialize name
       self.name = name.to_sym
+    end
+
+    #
+    # launch the cluster. A launched cluster is a fully armed and operational
+    # battlestation. Right now, same as #mount! -- but it's possible other
+    # assertions could be added.
+    #
+    def launch!
+      repeat_until(:launched?) do
+        instances.each{|inst| inst.launch! }
+        volumes.each{  |inst| inst.launch! }
+      end
+    end
+    # A launched cluster is a fully armed and operational battlestation. Right
+    # now, same as #mount! -- but it's possible other assertions could be added.
+    def launched?
+      instances.all?(&:launched?) && volumes.all?(&:launched?)
+    end
+
+    # terminate this cluster:
+    # * ensure all mounts are separated
+    # * ensure all mounts are snapshotted
+    # * put away all nodes and put away all mounts
+    def put_away!
+      repeat_until(:put_away?) do
+        instances.each{|inst| inst.put_away! }
+        volumes.each{  |inst| inst.put_away! }
+      end
+    end
+    # a cluster is away if all its instances and volumes are away (no longer running)
+    def put_away?
+      instances.all?(&:put_away?) && volumes.all?(&:put_away?)
+    end
+
+    # Bulk reload the state of all volumes, instances, SecurityGroups and Keypairs
+    def refresh!
+      [ Volume, Instance, SecurityGroup, Keypair ].each{|klass| klass.load_all! }
     end
 
     # pull in cluster's logical layout, and pair up any
@@ -53,21 +83,26 @@ module Wucluster
     end
 
     #
-    def roles
-      all_nodes.keys.map(&:first).uniq
-    end
-    #
-    def roles_count
-      roles_count = Hash.new{|h,k| 0 }
-      all_nodes.keys.each do |role, node_idx|
-        roles_count[role] += 1
-      end
-      roles_count
-    end
-
-    #
     def to_s
       %Q{#<#{self.class} #{self.name} nodes: #{roles_count.inspect} #{mounts.length} mounts>}
+    end
+
+  protected
+    # repeat_until test, [sleep_time]
+    #
+    # * runs block
+    # * tests for completion by calling (on self) the no-arg method +test+
+    # * if the test fails, sleep for a bit...
+    # * ... and then try again
+    #
+    # will only attempt MAX_TRIES times
+    def repeat_until test, &block
+      Settings.max_tries.times do
+        yield
+        break if self.send(test)
+        sleep Settings.sleep_time
+        refresh!
+      end
     end
   end
 end

@@ -1,3 +1,7 @@
+#
+# Load the cluster's logical layout from the settings file
+#
+
 module Wucluster
   class Cluster
 
@@ -20,6 +24,10 @@ module Wucluster
       load_instances_and_volumes
     end
 
+    #
+    # Load the cluster attributes -- its availability_zone, image_id for the
+    # instances, instance_type, etc.
+    #
     def load_attrs 
       self.availability_zone      = cluster_config[:availability_zone]      if cluster_config[:availability_zone]
       self.image_id               = cluster_config[:image_id]               if cluster_config[:image_id]
@@ -27,6 +35,9 @@ module Wucluster
       # self.deletes_on_termination = cluster_config[:deletes_on_termination] if cluster_config[:deletes_on_termination]
     end
 
+    # loads the tree of instance descriptions and their attendant volumes'
+    # descriptions 
+    #
     def load_instances_and_volumes
       cluster_instances = cluster_config[:instances] or return
       cluster_instances.each do |role, instances_for_role|
@@ -36,7 +47,9 @@ module Wucluster
         end
       end      
     end
-    
+
+    # takes a single layout branch describing an instance+volumes; constructs
+    # the instance object and its component volume objects
     def load_instance role, instance_idx, instance_cfg
       instance_type   = instance_cfg[:instance_type] || self.instance_type
       image_id        = instance_cfg[:image_id]      || self.image_id
@@ -44,45 +57,21 @@ module Wucluster
       @all_instances[cluster_node_id] = Instance.new_cluster_instance(self, role, cluster_node_id, image_id, instance_type)
       if instance_cfg[:volumes]
         instance_cfg[:volumes].each_with_index do |volume_cfg, instance_vol_idx|
-          load_volume_cfg(cluster_node_id, volume_cfg)
+          load_volume(cluster_node_id, volume_cfg)
         end
       end
     end
 
-    def load_volume_cfg cluster_node_id, volume_cfg
+    # constructs a volume from its layout description
+    def load_volume cluster_node_id, volume_cfg
       cluster_vol_id = cluster_node_id + '-' + volume_cfg[:mount_point]
-      cluster_vol_params = { :cluster => self,
+      cluster_vol_params = {
+        :cluster => self,
         :cluster_vol_id => cluster_vol_id, :cluster_node_id => cluster_node_id,
-      }.merge(volume_cfg.slice(:mount_point, :size, :from_snapshot_id, :availability_zone, :device))
+      }.merge(
+        volume_cfg.slice(:mount_point, :size, :from_snapshot_id, :availability_zone, :device))
       @all_volumes[cluster_vol_id] = Volume.new(cluster_vol_params)
     end
 
   end
 end
-
-# protected
-#
-# # Turn the cluster_role_instance_volume_tree into a flat list of volumes,
-# # an hash indexed by [role,instance_idx,instance_vol_idx]
-# # interface to cluster definition from cloudera config files
-# def load_from_cloudera_file
-#   @all_volumes = {}
-#   @all_instances  = {}
-#   cluster_role_instance_volume_tree.each do |role, cluster_instance_volumes|
-#     role = role
-#     cluster_instance_volumes.each_with_index do |volumes, instance_idx|
-#       image_id = 'ami-0b02e162' ; instance_type = 'm1.small'
-#       @all_instances[ [role, instance_idx] ] = Instance.new self, role, instance_idx, image_id, instance_type
-#       volumes.each_with_index do |volume, instance_vol_idx|
-#         @all_volumes[[role, instance_idx, instance_vol_idx]] =
-#           Volume.new(self, role, instance_idx, instance_vol_idx, volume['device'], volume['mount_point'], volume['volume_id'])
-#       end
-#     end
-#   end
-#   @all_volumes
-# end
-#
-# # The raw cluster_role_instance_volume_tree from the cloudera EC2 cluster file
-# def cluster_definition_from_cloudera_file
-#   JSON.load(File.open(Settings.cluster_definition_dir + "/ec2-storage-#{name}.json"))
-# end

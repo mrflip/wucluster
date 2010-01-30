@@ -1,12 +1,35 @@
-$: << File.dirname(__FILE__)
-require 'logger'
-require 'configliere'; Configliere.use :define, :config_file, :config_block
-require 'AWS'
+require 'AWS'               # gem install amazon-ec2
 require 'AWS/EC2/overrides'
 require 'json'
+require 'logger'
+#
+Log = Logger.new $stderr unless defined?(Log)
+require 'configliere'; Configliere.use :define, :config_file, :config_block
 require 'wucluster/exceptions'
 require 'wucluster/extensions'
-Log = Logger.new $stderr unless defined?(Log)
+
+#
+# Stateful operations on a persistent AWS cluster
+#
+# Wucluster lets you set up and tear down an AWS cluster
+#
+# Rather than describe a process to construct a cluster -- which requ
+#
+module Wucluster
+  autoload :Cluster,       'wucluster/cluster'
+  autoload :Volume,        'wucluster/volume'
+  autoload :Instance,      'wucluster/instance'
+  autoload :Snapshot,      'wucluster/snapshot'
+  autoload :SecurityGroup, 'wucluster/security_group'
+  autoload :Keypair,       'wucluster/keypair'
+
+  #
+  # single point of access to AWS calls
+  #
+  def self.ec2
+    @ec2 ||= AWS::EC2::Base.new(:access_key_id => Settings.aws_access_key_id, :secret_access_key => Settings.aws_secret_access_key)
+  end
+end
 
 Settings.define :sleep_time, :type => Float,   :default => 1.0,   :description => "How long to sleep between attempts"
 Settings.define :max_tries,  :type => Integer, :default => 15,    :description => "How many times to attempt an operation before giving up"
@@ -25,23 +48,3 @@ Settings.finally do |cfg|
   cfg[:ssh_options].gsub!(/%\(private_key\)s/, cfg[:private_key_dir])
 end
 Settings.resolve!
-
-module Wucluster
-
-  autoload :Cluster,          'wucluster/cluster'
-  autoload :Mount,            'wucluster/mount'
-  autoload :Node,             'wucluster/node'
-  autoload :Proxy,         'wucluster/proxy'
-  autoload :Volume,        'wucluster/volume'
-  autoload :Instance,      'wucluster/instance'
-  autoload :Snapshot,      'wucluster/snapshot'
-  autoload :SecurityGroup, 'wucluster/security_group'
-  autoload :Keypair,       'wucluster/keypair'
-
-  #
-  # single point of access to AWS calls
-  #
-  def self.ec2
-    @ec2 ||= AWS::EC2::Base.new(:access_key_id => Settings.aws_access_key_id, :secret_access_key => Settings.aws_secret_access_key)
-  end
-end

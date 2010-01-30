@@ -1,42 +1,9 @@
+require 'wucluster/volume/ec2'
+require 'wucluster/volume/components'
 module Wucluster
   class Volume
-    require 'wucluster/volume/ec2'
-    require 'wucluster/volume/has_snapshots'
-    require 'wucluster/volume/has_instances'
-    require 'wucluster/volume/state'
     include Ec2Proxy
     include DependencyGraph
-
-    #
-    # State diagram for volume setup and teardown
-    #
-
-    cattr_accessor :volume_graph
-    self.volume_graph = [
-      # goal                  precondition            next_action
-      [:away?,                 nil,                   nil],                     
-      [:creating?,             :away?,                :create!],                
-      [:created?,              :creating?,            :wait],
-      #
-      [:attaching?,           [:created?,  :instance_running?], :attach!],         
-      [:attached?,             :attaching?,           :wait],                   
-      [:mounted?,              :attached?,            :mount!],                 
-      [:launched?,            :mounted?,             nil],                     
-      #                                                                         
-      [:unmounted?,            :unmountable?,         :unmount!],
-      [:detaching?,            :unmounted?,           :separate!],              
-      [:detached?,             :detaching?,           :wait],                   
-      [:deleting?,            [:detached?, :recently_snapshotted?], :delete!], 
-      [:deleted?,              :deleting?,            :wait],                   
-      #
-      [:snapshotting?,         :detached?,            :snapshot!],
-      [:recently_snapshotted?, :snapshotting?,        :wait],
-      [:instance_running?,     nil,                   :run_instance!]
-    ]
-    # FIXME -- make a mattr_whatever
-    def dependencies
-      volume_graph
-    end
 
     #
     # Attributes
@@ -81,37 +48,41 @@ module Wucluster
     # Time stamp when the attachment initiated.
     attr_accessor :attached_at
 
-    def launched?
-      mounted?
-    end
+    #
+    # State diagram for volume setup and teardown
+    #
 
-    def away?
-      id.nil? || deleted?
-    end
-
-    def availability_zone
-      cluster.availability_zone if cluster
-    end
-
-    def instance_running?
-      instance.running?
-    end
-    def run_instance!
-      self.instance.become :running?
-    end
-
-    def self.new_cluster_volume cluster, cluster_vol_id,  mount_point,  size,  from_snapshot_id,  availability_zone,  device,  deletes_on_termination
-      new Hash.zip(
-        [:cluster, :role, :cluster_vol_id, :cluster_node_id, :mount_point, :size, :from_snapshot_id, :availability_zone, :device],
-        [ cluster,  role,  cluster_vol_id,  cluster_node_id, mount_point,  size,  from_snapshot_id,  availability_zone,  device])
+    cattr_accessor :volume_graph
+    self.volume_graph = [
+      # goal                  precondition            next_action
+      [:away?,                 nil,                   nil],                     
+      [:creating?,             :away?,                :create!],                
+      [:created?,              :creating?,            :wait],
+      #
+      [:attaching?,           [:created?,  :instance_running?], :attach!],         
+      [:attached?,             :attaching?,           :wait],                   
+      [:mounted?,              :attached?,            :mount!],                 
+      [:launched?,            :mounted?,             nil],                     
+      #                                                                         
+      [:unmounted?,            :unmountable?,         :unmount!],
+      [:detaching?,            :unmounted?,           :separate!],              
+      [:detached?,             :detaching?,           :wait],                   
+      [:deleting?,            [:detached?, :recently_snapshotted?], :delete!], 
+      [:deleted?,              :deleting?,            :wait],                   
+      #
+      [:snapshotting?,         :detached?,            :snapshot!],
+      [:recently_snapshotted?, :snapshotting?,        :wait],
+      [:instance_running?,     nil,                   :run_instance!]
+    ]
+    # FIXME -- make a mattr_whatever
+    def dependencies
+      volume_graph
     end
 
     def to_s
       %Q{#<#{self.class} #{id} #{status} #{size}GB #{availability_zone} #{created_at} att: #{attached_instance_id} @ #{attached_at}>}
     end
-    def inspect
-      to_s
-    end
+    def inspect() to_s end
     def to_hash
       %w[ cluster cluster_vol_id cluster_node_id mount_point id size from_snapshot_id
           availability_zone device deletes_on_termination
@@ -120,9 +91,6 @@ module Wucluster
     end
     def handle
       [cluster.name, cluster_node_id, device, mount_point, volume_id, size].join("+")
-    end
-    def instance
-      self.cluster.find_instance cluster_node_id
     end
   end
 end

@@ -1,6 +1,11 @@
 module Wucluster
   class Instance
 
+    # ===========================================================================
+    #
+    # Status
+    #
+
     def pending?()       status == :pending        end
     def running?()       status == :running        end
     def terminated?()    status == :terminated     end
@@ -9,23 +14,35 @@ module Wucluster
     def terminating?()   shutting_down?  end
     def deleting?()      shutting_down?  end
 
-
-    def get_cluster_node_id cluster_name
-      # return unless security_groups.include?(cluster_name.to_s)
-      security_groups.find_all{|sg| sg =~ /^#{cluster_name}-/}.sort.last
+    def away?
+      id.nil? || deleted?
     end
+
+    # hooks for anything that would prevent a running server from terminating
+    def terminateable?
+      puts "Test for terminable" ; true
+    end
+
+    def launched?
+      running?
+    end
+
     # ===========================================================================
     #
     # Actions
     #
 
-    # Launches a specified number of instances of an AMI for which you have permissions.
+    def refresh!
+      response = Wucluster.ec2.describe_instances(:instance_id => id)
+      update! self.class.api_hsh_to_params(response.reservationSet.item.first)
+    end
+
+  protected
+
+    # Starts the instance running
     #
     # Amazon API Docs : HTML[http://docs.amazonwebservices.com/AWSEC2/2009-10-31/APIReference/index.html?ApiReference-query-RunInstances.html]
     #
-    # image_id [String] Unique ID of a machine image.
-    # @option options [Integer] :min_count (1) Minimum number of instances to launch. If the value is more than Amazon EC2 can launch, no instances are launched at all.
-    # @option options [Integer] :max_count (1) Maximum number of instances to launch. If the value is more than Amazon EC2 can launch, the largest possible number above minCount will be launched instead.
     # @option options [optional, String] :additional_info (nil) Specifies additional information to make available to the instance(s).
     # @option options [optional, String] :user_data (nil) MIME, Base64-encoded user data (if :base64_encoded is false) or user_data plaintext (if :base64_encoded is true).
     # @option options [optional, Boolean] :base64_encoded (false) Whether or not to encode the user_data
@@ -37,7 +54,7 @@ module Wucluster
     # @option options [optional, Boolean] :disable_api_termination (true) Specifies whether the instance can be terminated using the APIs. You must modify this attribute before you can terminate any "locked" instances from the APIs.
     # @option options [optional, String] :instance_initiated_shutdown_behavior ('stop') Specifies whether the instance's Amazon EBS volumes are stopped or terminated when the instance is shut down. Valid values : 'stop', 'terminate'
     #
-    def run! options={}
+    def start_running! options={}
       return :wait if pending? || running?
       Log.info "Running #{self}"
       response = Wucluster.ec2.run_instances options.merge(:image_id => image_id,
@@ -48,15 +65,8 @@ module Wucluster
       undirty!
     end
 
-    # make a new volume proxy and create it on the remote end
-    def self.create! *args
-      inst = new *args
-      inst.run!
-      inst
-    end
-
-    # The TerminateInstances operation shuts down one or more instances.
-    def terminate! options={}
+    # Shut down the corresponding instance
+    def start_terminating! options={}
       return :wait if terminating? || terminated?
       Log.info "Terminating #{self}"
       response = Wucluster.ec2.terminate_instances options.merge(:instance_id => [self.id])
@@ -67,20 +77,35 @@ module Wucluster
       response
     end
 
+    def detach_volumes!
+      puts "Can't detach volumes yet"
+    end
+    def volumes_detached?
+      puts "Test for detach volumes" ; true
+    end
+
+    # def start! options={}
+    #   resp = Wucluster.ec2.start_instances     options.merge(:instance_id => [self.id])
+    # end
+    # #
+    # def stop! options={}
+    #   resp = Wucluster.ec2.stop_instances      options.merge(:instance_id => [self.id])
+    # end
+    # #
+    # def reboot! options={}
+    #   resp = Wucluster.ec2.reboot_instances    options.merge(:instance_id => [self.id])
+    # end
+    # #
+
     # ===========================================================================
     #
-    # API
+    # Low-level munging of AWS API responses
     #
 
     # retrieve info for all volumes from AWS
     def self.each_api_item &block
       response = Wucluster.ec2.describe_instances
       response.reservationSet.item.each(&block)
-    end
-
-    def refresh!
-      response = Wucluster.ec2.describe_instances(:instance_id => id)
-      update! self.class.api_hsh_to_params(response.reservationSet.item.first)
     end
 
     # construct instance using hash as sent back from AWS
@@ -102,19 +127,5 @@ module Wucluster
       hsh[:status]            = instance_info["instanceState"]['name'].gsub(/-/,'_').to_sym rescue nil
       hsh
     end
-
-    #
-    # def start! options={}
-    #   resp = Wucluster.ec2.start_instances     options.merge(:instance_id => [self.id])
-    # end
-    # #
-    # def stop! options={}
-    #   resp = Wucluster.ec2.stop_instances      options.merge(:instance_id => [self.id])
-    # end
-    # #
-    # def reboot! options={}
-    #   resp = Wucluster.ec2.reboot_instances    options.merge(:instance_id => [self.id])
-    # end
-    # #
   end
 end

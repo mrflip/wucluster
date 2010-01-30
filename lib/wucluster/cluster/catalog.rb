@@ -1,5 +1,36 @@
+#
+# Look for cluster's manifested components among the existing crowd.
+#
+
 module Wucluster
   class Cluster
+
+    #
+    # Find all existing instances that belong to this cluster
+    # and cram their metadata into the existing logical instance
+    #
+    def adopt_existing_instances!
+      Instance.all.each do |ec2_inst|
+        next if ec2_inst.deleted? || ec2_inst.deleting?
+        cluster_node_id = ec2_inst.get_cluster_node_id(self.name) or next
+        cluster_inst = @all_instances[cluster_node_id] or next
+        cluster_inst.update! ec2_inst.to_hash
+      end
+    end
+
+    #
+    # Find all existing volumes that belong to this cluster
+    # and cram their metadata into the existing logical volume
+    #
+    def adopt_existing_volumes!
+      Volume.all.each do |ec2_vol|
+        next if ec2_vol.deleted? || ec2_vol.deleting?
+        cluster_vol_id = ec2_vol.get_cluster_vol_id(self.name) or next
+        cluster_vol = @all_volumes[cluster_vol_id] or next
+        cluster_vol.update! ec2_vol.to_hash
+      end
+    end
+
     # def catalog_existing_snapshots
     #   return unless @all_instances
     #   volume_infos = Snapshot.all.sort_by(&:created_at).map(&:volume_info).compact
@@ -15,31 +46,6 @@ module Wucluster
     #   end
     # end
     #
-
-    def adopt_existing_instances!
-      Instance.all.each do |ec2_inst|
-        next if ec2_inst.deleted? || ec2_inst.deleting?
-        cluster_node_id = ec2_inst.get_cluster_node_id(self.name) or next
-        cluster_inst = @all_instances[cluster_node_id] or next
-        cluster_inst.update! ec2_inst.to_hash
-      end
-    end
-
-    def adopt_existing_volumes!
-      Volume.all.each do |ec2_vol|
-        next if ec2_vol.deleted? || ec2_vol.deleting?
-        cluster_vol_id = 'bonobo-master-000-/ebs2' # ec2_vol.get_cluster_vol_id(self.name) or next
-        cluster_vol = @all_volumes[cluster_vol_id] or next
-        cluster_vol.update! ec2_vol.to_hash
-      end
-    end
-
-
-    #
-    # def catalog_existing
-    #   most_recent_snapshots = catalog_existing_snapshots
-    #   [recent_snapshots]
-    # end
 
   end
 end

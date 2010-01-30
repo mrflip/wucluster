@@ -1,4 +1,5 @@
-require 'wucluster/instance/api'
+require 'wucluster/instance/ec2'
+require 'wucluster/instance/components'
 module Wucluster
   class Instance
     include Ec2Proxy
@@ -41,65 +42,18 @@ module Wucluster
 
     NODE_GRAPH = [
       [:away?, nil, nil],
-      [:pending?,      :away?,                        :run!],
-      [:running?,       :pending?,                    :wait],
-      [:launched?,      :running?,                     nil],
+      [:pending?,          :away?,               :start_running!],
+      [:running?,          :pending?,            :wait],
+      [:launched?,         :running?,            nil],
       #
-      [:post_launched?, nil, nil],
-      [:volumes_detached?, :post_launched?, :detach_volumes!],
-      [:terminateable?, [:volumes_detached?,], nil],
-      [:terminating?,   :terminateable?,  :terminate!],
-      [:terminated?, :terminating?, :wait],
+      [:post_launched?,    nil, nil],
+      [:volumes_detached?, :post_launched?,      :detach_volumes!],
+      [:terminateable?,   [:volumes_detached?,], nil],
+      [:terminating?,      :terminateable?,      :start_terminating!],
+      [:terminated?,       :terminating?,        :wait],
     ]
     def dependencies
       Wucluster::Instance::NODE_GRAPH
-    end
-
-    def away?
-      id.nil? || deleted?
-    end
-
-    # hooks for anything that would prevent a running server from terminating
-    def terminateable?
-      puts "Test for terminable" ; true
-    end
-    def detach_volumes!
-      puts "Can't detach volumes yet"
-    end
-    def volumes_detached?
-      puts "Test for detach volumes" ; true
-    end
-
-    def launched?
-      running?
-    end
-
-    # Name of the security group. Act as both logical labels for the instance
-    # and define its security policy
-    #
-    # The nodes label themselves with cluster name and with cluster.name-role
-    #
-    # @example
-    #   cluster = Cluster.new :bonobo
-    #   Node.new cluster, :master, 0,
-    def security_groups
-      [cluster.name.to_s, "#{cluster.name}-#{role}", cluster_node_id]
-    end
-
-    # The name of the AWS key pair, used for remote access to instance
-    def key_name
-      cluster.name.to_s
-    end
-
-    # Placement constraints (Availability Zones) for launching the instances.
-    def availability_zone
-      cluster.availability_zone
-    end
-
-    def self.new_cluster_instance cluster, role, cluster_node_id, image_id, instance_type
-      new Hash.zip(
-        [:cluster, :role, :cluster_node_id, :image_id, :instance_type],
-        [ cluster,  role,  cluster_node_id,  image_id,  instance_type])
     end
 
     def to_s

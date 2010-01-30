@@ -1,3 +1,8 @@
+#
+# interface between cluster and its component instances, volumes, snapshots,
+# security_groups and keypairs
+#
+
 module Wucluster
   class Cluster
 
@@ -37,6 +42,19 @@ module Wucluster
     # Instance with the given role and index
     def find_instance cluster_node_id
       all_instances[ cluster_node_id ]
+    end
+
+    # enumerate all roles found among this cluster's instances
+    def roles
+      roles_count.keys.uniq
+    end
+    # map of roles to count of instances with that role
+    def roles_count
+      roles_count = Hash.new{|h,k| 0 }
+      all_instances.values.each do |instance|
+        roles_count[instance.role] += 1
+      end
+      roles_count
     end
 
     # flat list of snapshots from all volumes
