@@ -5,8 +5,10 @@ require 'logger'
 #
 Log = Logger.new $stderr unless defined?(Log)
 require 'configliere'; Configliere.use :define, :config_file, :config_block
+require 'extlib'
 require 'wucluster/exceptions'
 require 'wucluster/extensions'
+require 'wucluster/ec2_proxy'
 
 #
 # Stateful operations on a persistent AWS cluster

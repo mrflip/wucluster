@@ -1,6 +1,12 @@
 require 'wucluster/volume/ec2'
 require 'wucluster/volume/components'
 module Wucluster
+  #
+  # Wucluster::Volume is a facade for the EC2 ruby API --
+  #
+  # * you can treat the volume as a logical entity: specifying the properties
+  #   of a volume that doesn't yet exist remotely
+  #
   class Volume
     include Ec2Proxy
     include DependencyGraph
@@ -60,7 +66,7 @@ module Wucluster
       mounted?
     end
 
-    # Become fully unmounted, detached, snapshotted, deleted, 
+    # Become fully unmounted, detached, snapshotted, deleted,
     def put_away!
       delete!
     end
