@@ -80,10 +80,10 @@ module Wucluster
     # will only attempt MAX_TRIES times
     def repeat_until goal, &block
       Settings.max_tries.times do
+        refresh!
         yield
         break if self.send(goal)
         sleep Settings.sleep_time
-        refresh!
       end
       self.send(goal)
     end

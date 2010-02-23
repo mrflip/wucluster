@@ -32,6 +32,7 @@ module Wucluster
       # refresh! if dirty?
       return :error if (existence_status == :error) || (attachment_status == :error)
       case existence_status
+      when nil                   then :deleted
       when :deleted              then :deleted
       when :creating             then :creating
       when :available
@@ -49,16 +50,18 @@ module Wucluster
         when :busy               then :busy
         else                     raise UnexpectedState, "#{existence_status} - #{attachment_status}" end
       when :deleting             then :deleting
+      else
+        raise "WTF, I don't understand my status: #{existence_status} - #{attachment_status}"
       end
     end
     def deleted?()   status == :deleted   end
+    def deleting?()  status == :deleting  end
     def creating?()  status == :creating  end
     def created?()   [:in_use, :available].include?(existence_status) end
-    def deleting?()  status == :deleting  end
     def detached?()  status == :detached  end
+    def detaching?() status == :detaching end
     def attaching?() status == :attaching end
     def attached?()  status == :attached  end
-    def detaching?() status == :detaching end
     def busy?()      status == :busy      end
     def error?()     status == :error     end
     def mounted?

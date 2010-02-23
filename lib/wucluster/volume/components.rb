@@ -4,17 +4,11 @@ module Wucluster
     #
     # Cluster
     #
-    
+
     def self.new_cluster_volume cluster, cluster_vol_id,  mount_point,  size,  from_snapshot_id,  availability_zone,  device,  deletes_on_termination
       new Hash.zip(
         [:cluster, :role, :cluster_vol_id, :cluster_node_id, :mount_point, :size, :from_snapshot_id, :availability_zone, :device],
         [ cluster,  role,  cluster_vol_id,  cluster_node_id, mount_point,  size,  from_snapshot_id,  availability_zone,  device])
-    end
-
-    # availability_zone, either as set from concrete manifestation or (else) as
-    # logically defined by cluster.
-    def availability_zone
-      @availability_zone || (cluster && cluster.availability_zone)
     end
 
     # Use attachment info to recover the cluster and instance
@@ -29,9 +23,10 @@ module Wucluster
     # Instance
     #
 
-    # True if instance is running
+    # Uses its cluster to find the right instance
     def instance
-      self.cluster.find_instance cluster_node_id
+      return nil unless cluster
+      cluster.find_instance cluster_node_id
     end
     #
     def instance_running?

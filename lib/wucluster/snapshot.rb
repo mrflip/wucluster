@@ -58,7 +58,7 @@ module Wucluster
     end
 
     # Look up snapshot for provided volume
-    def self.for_volume_id volume
+    def self.for_volume_id volume_id
       return [] unless volume_id
       all.find_all{|snap| snap.volume_id == volume_id }
     end

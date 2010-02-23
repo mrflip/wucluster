@@ -48,6 +48,12 @@ module Wucluster
     # Time stamp when the attachment initiated.
     attr_accessor :attached_at
 
+    # availability_zone, either as set from concrete manifestation or (else) as
+    # logically defined by cluster.
+    def availability_zone
+      @availability_zone || (cluster && cluster.availability_zone)
+    end
+
     #
     # Actions to take for volume
     #
@@ -60,12 +66,12 @@ module Wucluster
       mounted?
     end
 
-    # Become fully unmounted, detached, snapshotted, deleted, 
+    # Become fully unmounted, detached, snapshotted, deleted,
     def put_away!
       delete!
     end
     def put_away?
-      deleted?
+      deleted? || deleting?
     end
 
     def create!()   self.become :created?     end

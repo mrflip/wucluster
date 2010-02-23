@@ -96,7 +96,7 @@ module Wucluster
 
     #
     def to_s
-      %Q{#<#{self.class} #{self.name} nodes: #{roles_count.inspect} #{mounts.length} mounts>}
+      %Q{#<#{self.class} #{self.name} nodes: #{roles_count.inspect} #{volumes.length} mounts>}
     end
 
   end

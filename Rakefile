@@ -10,6 +10,7 @@ begin
     gem.email = "flip@infochimps.org"
     gem.homepage = "http://github.com/mrflip/wucluster"
     gem.authors = ["Philip (flip) Kromer"]
+    gem.add_dependency "amazon-ec2"
     gem.add_development_dependency "rspec"
     # gem is a Gem::Specification... see http://www.rubygems.org/read/chapter/20 for additional settings
   end

@@ -12,31 +12,9 @@ module Wucluster
     # Cluster
     #
 
-    # Name of the security group. Act as both logical labels for the instance
-    # and define its security policy
-    #
-    # The nodes label themselves with cluster name and with cluster.name-role
-    #
-    # @example
-    #   cluster = Cluster.new :bonobo
-    #   Node.new cluster, :master, 0,
-    def security_groups
-      @security_groups || logical_security_groups
-    end
-
     # Security groups defined by cluster structure
     def logical_security_groups
       @security_groups = [cluster.name.to_s, "#{cluster.name}-#{role}", cluster_node_id]
-    end
-
-    # The name of the AWS key pair, used for remote access to instance
-    def key_name
-      @key_name || cluster.name.to_s
-    end
-
-    # Placement constraints (Availability Zones) for launching the instances.
-    def availability_zone
-      @availability_zone || cluster.availability_zone
     end
 
     # Builds a logical instance object (disconnected from any running instance
