@@ -81,6 +81,35 @@ module Wucluster
       undirty!
     end
 
+    # Run +command+ on the instance and return a hash with its stdout,
+    # stderr, and exit code.
+    #
+    # FIXME haven't tested this...
+    def remote_command command, options={}
+      return unless running?
+      returning({ :stdout => '', :stderr => '', :exit_status => nil }) do |output|
+        remote_stdout, remote_stderr, exit_code = '', '', nil
+        Net::SSH.start(public_ip, options[:user] || "root", {:paranoid => false}.merge(options)) do |connection|
+          connection.open_channel do |channel|
+            channel.on_data          { |ch, data|       output[:stdout] += data }
+            channel.on_extended_data { |ch, type, data| output[:stderr] += data }
+            channel.on_request("exit-status") do |p, data|
+              output[:exit_status] = data.read_long
+            end
+            channel.exec(command) do |ch, executing|
+              raise "Could not execute: #{command}" unless executing
+            end
+          end
+        end
+      end
+    end
+
+    def successful_remote_command? command, options={}
+      return true               # FIXME
+      result = remote_command(command, options)
+      result && result[:exit_status] == 0
+    end
+    
     # Shut down the corresponding instance
     def start_terminating! options={}
       return :wait if terminating? || terminated? || busy?
@@ -93,6 +122,7 @@ module Wucluster
       response
     end
 
+    # FIXME
     def detach_volumes!
       puts "Can't detach volumes yet"
     end

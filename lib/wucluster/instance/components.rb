@@ -35,6 +35,10 @@ module Wucluster
     #
     # Volume
     #
+    def volumes
+      return nil unless cluster
+      cluster.volumes.find { |vol| vol.cluster_node_id == cluster_node_id }
+    end
 
     # remotely issues the command to mount the given volume
     #
@@ -42,17 +46,15 @@ module Wucluster
     #
     # @return :mounted if successful
     def mount! volume
-      puts "Can't mount volumes yet (#{volume})"
-      return :mounted
+      return :mounted if successful_remote_command?("mount #{volume.device} #{volume.mount_point}")
     end
     # remotely issues the command to unmount the given volume
     #
     # @param volume [Wucluster::Volume] the volume to unmount
     #
-    # @return :mounted if successful
+    # @return :unmounted if successful
     def unmount! volume
-      puts "Can't unmount volumes yet (#{volume})"
-      return :unmounted
+      return :unmounted if successful_remote_command?("umount #{volume.device}")
     end
 
   end
