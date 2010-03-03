@@ -86,7 +86,7 @@ module Wucluster
     def unmount!()  self.become :unmounted?   end
     def detach!()   self.become :detached?    end
     def delete!()   self.become :deleted?     end
-    def snapshot!() self.become :snapshotted? end
+    def snapshot!() self.become :recently_snapshotted? end
 
     #
     # State diagram for volume setup and teardown

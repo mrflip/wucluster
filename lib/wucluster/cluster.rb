@@ -67,15 +67,14 @@ module Wucluster
     end
 
     # Detach and snapshot all the volumes of this cluster
-    def put_away_volumes!
-      repeat_until :put_away_volumes? do
-        voluems.each { |vol| vol.put_away! }
+    def separate_and_snapshot!
+      repeat_until :recently_snapshotted? do
+        volumes.each{|vol| vol.snapshot! }
       end
     end
-
     # Are all the volumes of this cluster put away?
-    def put_away_volumes?
-      volumes.all?(&:put_away?)
+    def recently_snapshotted?
+      volumes.all?(&:recently_snapshotted?)
     end
 
     # Bulk reload the state of all volumes, instances, SecurityGroups and Keypairs
