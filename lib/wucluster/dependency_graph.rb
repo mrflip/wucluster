@@ -82,7 +82,7 @@ module Wucluster
       Settings.max_tries.times do
         refresh!
         yield
-        break if self.send(goal)
+        break if met?(goal)
         sleep Settings.sleep_time
       end
       self.send(goal)

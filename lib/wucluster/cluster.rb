@@ -57,13 +57,25 @@ module Wucluster
     # * put away all nodes and put away all mounts
     def put_away!
       repeat_until(:put_away?) do
-        instances.each{|inst| inst.put_away! }
-        volumes.each{  |inst| inst.put_away! }
+        instances.each{ |inst| inst.put_away! }
+        volumes.each  { |vol|  vol.put_away!  }
       end
     end
     # a cluster is away if all its instances and volumes are away (no longer running)
     def put_away?
       instances.all?(&:put_away?) && volumes.all?(&:put_away?)
+    end
+
+    # Detach and snapshot all the volumes of this cluster
+    def put_away_volumes!
+      repeat_until :put_away_volumes? do
+        voluems.each { |vol| vol.put_away! }
+      end
+    end
+
+    # Are all the volumes of this cluster put away?
+    def put_away_volumes?
+      volumes.all?(&:put_away?)
     end
 
     # Bulk reload the state of all volumes, instances, SecurityGroups and Keypairs
