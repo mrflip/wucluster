@@ -16,7 +16,7 @@ module Wucluster
     def deleting?()      shutting_down?            end
 
     def away?
-      id.nil? || deleted?
+      id.nil? || terminated?
     end
 
     # hooks for anything that would prevent a running server from terminating
@@ -71,7 +71,8 @@ module Wucluster
     # @option options [optional, String] :instance_initiated_shutdown_behavior ('stop') Specifies whether the instance's Amazon EBS volumes are stopped or terminated when the instance is shut down. Valid values : 'stop', 'terminate'
     #
     def start_running! options={}
-      return :wait if pending? || running? || busy?
+      return true  if running?
+      return :wait if pending? || busy?
       Log.info "Running #{self}"
       response = Wucluster.ec2.run_instances options.merge(:image_id => image_id,
         :key_name => key_name, :security_group => security_groups, :availability_zone => availability_zone,
@@ -83,7 +84,8 @@ module Wucluster
 
     # Shut down the corresponding instance
     def start_terminating! options={}
-      return :wait if terminating? || terminated? || busy?
+      return true  if away?
+      return :wait if terminating? || busy?
       Log.info "Terminating #{self}"
       response = Wucluster.ec2.terminate_instances options.merge(:instance_id => [self.id])
       new_state = response.instancesSet.item.first.currentState.name rescue nil

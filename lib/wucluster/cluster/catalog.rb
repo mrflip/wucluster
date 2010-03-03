@@ -1,7 +1,6 @@
 #
 # Look for cluster's manifested components among the existing crowd.
 #
-
 module Wucluster
   class Cluster
 
@@ -35,21 +34,13 @@ module Wucluster
       end
     end
 
-    # def catalog_existing_snapshots
-    #   return unless @all_instances
-    #   volume_infos = Snapshot.all.sort_by(&:created_at).map(&:volume_info).compact
-    #   snapshots_for_volumes = { }
-    #   volume_infos.each do |mnt_info|
-    #     next unless mnt_info[:cluster_name].to_s == name.to_s
-    #     snapshots_for_volumes[ [mnt_info[:role], mnt_info[:instance_idx], mnt_info[:instance_vol_idx] ] ] = mnt_info
-    #   end
-    #   snapshots_for_volumes.each do |mnt_id, mnt_info|
-    #     volume = @all_volumes[mnt_id] or next
-    #     next if volume.created? || volume.creating?
-    #     volume.from_snapshot_id = mnt_info[:from_snapshot_id]
-    #   end
-    # end
-    #
-
+    def create_away_volumes_from_snapshots
+      snapshots.each do |snap|
+        vol_in_cluster = all_volumes[snap.volume_info[:cluster_vol_id]]
+        if vol_in_cluster.put_away? && vol_in_cluster.from_snapshot_id.blank?
+          vol_in_cluster.from_snapshot_id = snap.id
+        end
+      end
+    end
   end
 end

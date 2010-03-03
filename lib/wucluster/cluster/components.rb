@@ -2,7 +2,6 @@
 # interface between cluster and its component instances, volumes, snapshots,
 # security_groups and keypairs
 #
-
 module Wucluster
   class Cluster
 
@@ -59,7 +58,7 @@ module Wucluster
 
     # flat list of snapshots from all volumes
     def snapshots
-      Volume::Snapshot.all.find_all{|snap| }
+      Volume::Snapshot.for_cluster(self)
     end
 
   end

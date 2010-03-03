@@ -5,6 +5,13 @@ module Wucluster
     # Cluster
     #
 
+    def cluster= cluster
+      self.cluster_name = cluster.name
+    end
+    def cluster
+      Cluster.find(cluster_name) if cluster_name
+    end
+
     def self.new_cluster_volume cluster, cluster_vol_id,  mount_point,  size,  from_snapshot_id,  availability_zone,  device,  deletes_on_termination
       new Hash.zip(
         [:cluster, :role, :cluster_vol_id, :cluster_node_id, :mount_point, :size, :from_snapshot_id, :availability_zone, :device],

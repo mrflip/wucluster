@@ -18,7 +18,7 @@ module Wucluster
     # Volume's meta-attributes, defined by the cluster
 
     # Cluster this volume belongs to
-    attr_accessor :cluster
+    attr_accessor :cluster_name
     # cluster identifier for this volume
     attr_accessor :cluster_vol_id
     # cluster identifier for instance it will attach to
@@ -77,7 +77,7 @@ module Wucluster
       delete!
     end
     def put_away?
-      deleted? || deleting?
+      status.nil? || deleted? || deleting?
     end
 
     def create!()   self.become :created?     end
@@ -120,17 +120,17 @@ module Wucluster
     end
 
     def to_s
-      %Q{#<#{self.class} #{id} #{status} #{size}GB #{availability_zone} #{created_at} att: #{attached_instance_id} @ #{attached_at} #{mount_point} #{device} >}
+      %Q{#<#{self.class} #{id} #{status} #{size}GB #{availability_zone} #{created_at} #{cluster_name} att: #{attached_instance_id} @ #{attached_at} #{mount_point} #{device} >}
     end
     def inspect() to_s end
     def to_hash
-      %w[ cluster cluster_vol_id cluster_node_id mount_point id size from_snapshot_id
+      %w[ cluster_name cluster_vol_id cluster_node_id mount_point id size from_snapshot_id
           availability_zone device deletes_on_termination
           existence_status created_at attached_instance_id attachment_status attached_at
         ].inject({}){|hsh, attr| hsh[attr.to_sym] = self.send(attr); hsh}
     end
     def handle
-      [cluster.name, instance.role, instance.cluster_node_index, 0, device, mount_point, id, size].join("+")
+      [cluster_name, instance.role, instance.cluster_node_index, device, mount_point].join("+")
     end
   end
 end

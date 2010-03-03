@@ -71,6 +71,10 @@ module Wucluster
         Log.info "Loaded list of #{@objs_list.length} #{self}s"
         @objs_list
       end
+
+      def refresh!
+        load_all!
+      end
     end
 
     # standard stunt to create class methods

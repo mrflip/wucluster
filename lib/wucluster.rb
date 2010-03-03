@@ -39,7 +39,7 @@ Settings.define :max_tries,  :type => Integer, :default => 15,    :description =
 Settings.define :aws_access_key_id,            :required => true, :description => "Amazon AWS access key ID -- found in your AWS console (http://bit.ly/awsconsole)"
 Settings.define :aws_secret_access_key,        :required => true, :description => "Amazon AWS secret access key -- found in your AWS console (http://bit.ly/awsconsole)"
 Settings.define :aws_account_id,               :required => true, :description => "Amazon AWS account ID, without dashes -- found in your AWS console (http://bit.ly/awsconsole)"
-Settings.define :aws_availability_zone,        :default => 'us-east-1d', :description => "default availability zone for the cluster. For a bunch of good reasons, all parts of a cluster should be in the same availability zone"
+Settings.define :availability_zone,            :default => 'us-east-1d', :description => "default availability zone for the cluster. For a bunch of good reasons, all parts of a cluster should be in the same availability zone"
 Settings.define :private_key_dir,              :required => true, :description => "Directory storing keypair private keys, each with the name 'keypair_name.pem'"
 Settings.define :ssh_options,                  :default => '-i %(private_key)s -o StrictHostKeyChecking=no', :description => "Options to pass to the ssh program. The exact string '%(private_key)s' will be substituted with the corresponding keypair's private_key filename."
 # Settings.define :cluster_definition_dir,        :default => ENV['HOME']+'/.hadoop-ec2', :required => true, :description => "Amazon AWS secret access key, found in your AWS console (http://bit.ly/awsconsole)"

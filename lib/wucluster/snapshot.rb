@@ -21,7 +21,7 @@ module Wucluster
     # [Integer] Size of the volume in GiB
     attr_accessor :size
     # Description of the owning volume
-    attr_accessor :mount_handle
+    attr_accessor :volume_handle
 
     # ===========================================================================
     #
@@ -30,26 +30,26 @@ module Wucluster
 
     # Logical volume info for this snapshot
     def volume_info
-      return @mount_info if @mount_info
-      return nil if mount_handle.blank?
-      fields  = mount_handle.split(/\+/)
+      return {} if volume_handle.blank?
+      fields  = volume_handle.split(/\+/)
       if fields[3] =~ /^\d+$/ then fields.slice!(3) end
-      cluster_name, role, node_idx, device, mount_point, volume_id, size = fields
-      return nil if role.blank?
+      cluster_name, role, node_idx, device, mount_point, volume_id = fields
+      return {} if role.blank?
       node_idx = node_idx.to_i
-      size = size.to_i
-      cluster = Cluster.find cluster_name
-      { :cluster => cluster,
-        # :role => role,
-        :cluster_node_id => "#{cluster_name}-#{role}-#{"%03d"%node_idx}",
-        :cluster_vol_id  => "#{cluster_name}-#{role}-#{"%03d"%node_idx}-#{device}",
-        :device => device, :mount_point => mount_point, :id => volume_id, :size => size,
+      size = self.size.to_i
+      {
+        :cluster_name     => cluster_name.to_sym,
+        :cluster_node_id  => "#{cluster_name}-#{role}-#{"%03d"%node_idx}",
+        :cluster_vol_id   => "#{cluster_name}-#{role}-#{"%03d"%node_idx}-#{device}",
+        :device           => device,
+        :mount_point      => mount_point,
+        :id               => volume_id,
+        :size             => size,
         :from_snapshot_id => id,
-        # :snapshotted_at => created_at
       }
     end
     def cluster_name
-      volume_info[:cluster_name]
+      volume_info[:cluster_name] unless volume_info.blank?
     end
 
     # The volume associated with this snapshot
@@ -57,14 +57,20 @@ module Wucluster
       @volume ||= Volume.find volume_id
     end
 
+    # All snapshots in descending (latest to earliest) date order
+    def self.all_by_date
+      all.sort_by(&:created_at).reverse
+    end
+
     # Look up snapshot for provided volume
     def self.for_volume_id volume_id
       return [] unless volume_id
-      all.find_all{|snap| snap.volume_id == volume_id }
+      all_by_date.find_all{|snap| snap.volume_id == volume_id }
     end
 
+    # Find all snapshots for given cluster (as reverse engineered from its description)
     def self.for_cluster cluster
-      all.find_all{|snap| snap.cluster_name = cluster.name }
+      all_by_date.find_all{|snap| snap.cluster_name == cluster.name }
     end
 
     # ===========================================================================
@@ -91,7 +97,7 @@ module Wucluster
 
     # Delete the snapshot on the AWS side
     def delete!
-      Log.info "Deleting #{mount_handle}. O, I die, Horatio."
+      Log.info "Deleting #{volume_handle}. O, I die, Horatio."
       # Wucluster.ec2.delete_snapshot(:snapshot_id => id)
     end
 
@@ -125,6 +131,13 @@ module Wucluster
       update! self.class.api_hsh_to_params(response.snapshotSet.item.first)
     end
 
+    def to_s
+      %Q{#<#{self.class} #{id} #{volume_id} #{size} #{volume_handle} #{volume_info[:cluster]} #{status} #{progress}>}
+    end
+    def to_str
+      to_s
+    end
+
   protected
 
     def self.each_api_item &block
@@ -144,7 +157,7 @@ module Wucluster
         :progress      => api_hsh['progress'],
         :owner_id      => api_hsh['ownerId'],
         :size          => api_hsh['volumeSize'].to_i,
-        :mount_handle  => api_hsh['description'],
+        :volume_handle => api_hsh['description'],
       }
       hsh[:created_at] = api_hsh[ 'startTime']
       hsh
