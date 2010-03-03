@@ -17,14 +17,18 @@ module Wucluster
     end
 
     def from_cloudera_storage_hash
-      File.open(File.expand_path("~/.hadoop_ec2/")
-      volumes.each do |volume|
-        role     = volume.instance.role
-        node_idx = volume.instance.cluster_node_index.to_i
-        vol_hsh = { 'device' => volume.device, 'mount_point' => volume.mount_point, 'volume_id' => volume.id }
-        (cluster_roles[role][node_idx] ||= []) << vol_hsh
+      cloudera_hsh = JSON.load( File.open(File.expand_path("~/.hadoop-ec2/ec2-storage-#{name}.json")) )
+      cloudera_hsh.each do |role, role_instances|
+        role_instances.each_with_index do |vol_infos, node_idx|
+          vol_infos.each do |vol_info|
+            handle = [self.name, role, "%03d"%node_idx, vol_info['device']].join('-')
+            volume = all_volumes[handle]
+            raise "Couldn't find specified volume: #{handle} -- logical layout in wucluster.yaml and cloudera layout might be different" if !volume
+            warn "Mismatch between layouts: #{vol_info.inspect} vs #{volume}" if (volume.device != vol_info['device']) || (volume.mount_point != vol_info['mount_point'])
+            volume.id = vol_info['volume_id']
+          end
+        end
       end
-      cluster_roles
     end
 
   protected
