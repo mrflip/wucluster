@@ -23,6 +23,8 @@ module Wucluster
     attr_accessor :cluster_vol_id
     # cluster identifier for instance it will attach to
     attr_accessor :cluster_node_id
+    # cluster identifier for instance it will attach to
+    attr_accessor :cluster_vol_index
     # mount path for volume
     attr_accessor :mount_point
 
@@ -130,7 +132,7 @@ module Wucluster
         ].inject({}){|hsh, attr| hsh[attr.to_sym] = self.send(attr); hsh}
     end
     def handle
-      [cluster_name, instance.role, instance.cluster_node_index, device, mount_point].join("+")
+      [cluster_name, cluster_node_id, cluster_vol_id, cluster_vol_index, device, mount_point].join("+")
     end
   end
 end
